@@ -481,8 +481,13 @@ void cmVisualStudio10TargetGenerator::GenerateCSXamarinUWP()
     {
       Elem e1(e0, "PropertyGroup");
       e1.Attribute("Label", "Globals");
-      e1.Element("ProjectGuid", "{87C990E9-E3B4-4603-AA5B-E70B00A38F04}");
-      e1.Element("OutputType", "AppContainerExe");
+      e1.Element("ProjectGuid", "{"+ this->GUID +"}");
+
+      if (this->GeneratorTarget->GetType() == cmStateEnums::EXECUTABLE)
+        e1.Element("OutputType", "AppContainerExe");
+      else
+          e1.Element("OutputType", "Library");
+
       e1.Element("AppDesignerFolder", "Properties");
       e1.Element("DefaultLanguage", "en-US");
 
