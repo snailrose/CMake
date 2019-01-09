@@ -286,7 +286,7 @@ bool cmGlobalVisualStudio8Generator::NeedsDeploy(
 {
   bool needsDeploy =
     (type == cmStateEnums::EXECUTABLE || type == cmStateEnums::SHARED_LIBRARY);
-  return this->TargetsWindowsCE() && needsDeploy;
+  return /*this->TargetsWindowsCE() && */needsDeploy;
 }
 
 bool cmGlobalVisualStudio8Generator::ComputeTargetDepends()

@@ -67,6 +67,10 @@ private:
   void WriteExcludeFromBuild(Elem& e2,
                              std::vector<size_t> const& exclude_configs);
   void WriteAllSources(Elem& e0);
+  void WriteDotNetPackages(Elem& e0);
+  void WriteDotNetPackage(Elem& e1, std::string const& ref,
+                            std::string const& hint,
+                            std::string const& config);
   void WriteDotNetReferences(Elem& e0);
   void WriteDotNetReference(Elem& e1, std::string const& ref,
                             std::string const& hint,
@@ -139,6 +143,14 @@ private:
                              std::string const& inputs,
                              std::string const& outputs,
                              std::string const& comment);
+
+  void ComputeCustomCommands();
+  void WriteCustomRuleCSharpSTD(Elem& e0, std::string const& config,
+                             std::string const& commandName,
+                             std::string const& script,
+                             std::string const& inputs,
+                             std::string const& outputs,
+                             std::string const& comment);
   void WriteCustomCommands(Elem& e0);
   void WriteCustomCommand(Elem& e0, cmSourceFile const* sf);
   void WriteGroups();
@@ -189,7 +201,8 @@ private:
   enum VsProjectType
   {
     vcxproj,
-    csproj
+    csproj,
+    csstandard
   } ProjectType;
   bool InSourceBuild;
   std::vector<std::string> Configurations;
@@ -226,6 +239,10 @@ private:
   typedef std::map<std::string, ToolSources> ToolSourceMap;
   ToolSourceMap Tools;
   std::string GetCMakeFilePath(const char* name) const;
+  void GenerateCSStandard();
+  void GenerateCSXamarinUWP();
+  void GenerateCSXamariniOS();
+  void GenerateCSXamarinAndroid();
 };
 
 #endif

@@ -256,14 +256,20 @@ std::string cmVisualStudio10TargetGenerator::CalcCondition(
   oss << "'$(Configuration)|$(Platform)'=='";
   oss << config << "|" << this->Platform;
   oss << "'";
+
   // handle special case for 32 bit C# targets
-  if (this->ProjectType == csproj && this->Platform == "Win32") {
+  if (( this->ProjectType == csproj || this->ProjectType == csstandard) && 
+      this->Platform == "Win32") {
+    oss << " Or ";
+    oss << "'$(Configuration)|$(Platform)'=='";
+    oss << config << "|AnyCPU";
+    oss << "'";
     oss << " Or ";
     oss << "'$(Configuration)|$(Platform)'=='";
     oss << config << "|x86";
     oss << "'";
-  }
-  return oss.str();
+   }
+   return oss.str();
 }
 
 void cmVisualStudio10TargetGenerator::Elem::WritePlatformConfigTag(
@@ -297,6 +303,266 @@ std::ostream& cmVisualStudio10TargetGenerator::Elem::WriteString(
   "$(UserRootDir)\\Microsoft.CSharp.$(Platform).user.props"
 #define VS10_CSharp_TARGETS "$(MSBuildToolsPath)\\Microsoft.CSharp.targets"
 
+void cmVisualStudio10TargetGenerator::GenerateCSStandard()
+{
+  const std::string ProjectFileExtension =
+    computeProjectFileExtension(this->GeneratorTarget);
+
+  std::string path = this->LocalGenerator->GetCurrentBinaryDirectory();
+  path += "/";
+  path += this->Name;
+  path += ProjectFileExtension;
+  cmGeneratedFileStream BuildFileStream(path);
+  const std::string PathToProjectFile = path;
+  BuildFileStream.SetCopyIfDifferent(true);
+
+  this->GeneratorTarget->Target->SetProperty("GENERATOR_FILE_NAME",
+                                             this->Name.c_str());
+  this->GeneratorTarget->Target->SetProperty("GENERATOR_FILE_NAME_EXT",
+                                             ProjectFileExtension.c_str());
+  this->DotNetHintReferences.clear();
+  this->AdditionalUsingDirectories.clear();
+  if (this->GeneratorTarget->GetType() <= cmStateEnums::OBJECT_LIBRARY) {
+    if (!this->ComputeClOptions()) {
+      return;
+    }
+    if (!this->ComputeRcOptions()) {
+      return;
+    }
+    if (!this->ComputeCudaOptions()) {
+      return;
+    }
+    if (!this->ComputeCudaLinkOptions()) {
+      return;
+    }
+    if (!this->ComputeMasmOptions()) {
+      return;
+    }
+    if (!this->ComputeNasmOptions()) {
+      return;
+    }
+    if (!this->ComputeLinkOptions()) {
+      return;
+    }
+    if (!this->ComputeLibOptions()) {
+      return;
+    }
+  }
+
+  {
+    Elem e0(BuildFileStream, "Project");
+    e0.Attribute("Sdk", "Microsoft.NET.Sdk");
+
+    this->ComputeCustomCommands();
+    if (!this->CSharpCustomCommandNames.empty()) {
+      std::string ini = "";
+      size_t size = this->CSharpCustomCommandNames.size(), i = 0;
+
+      for (std::string name : this->CSharpCustomCommandNames) {
+        ini += name;
+
+        if (i + 1 < size)
+          ini += ";";
+        ++i;
+      }
+      e0.Attribute("InitialTargets", ini);
+    }
+
+    const char* dotNet =
+      this->GeneratorTarget->Target->GetProperty("VS_DOTNET_STANDARD_VERSION");
+
+    {
+      Elem e1(e0, "PropertyGroup");
+      e1.Element("TargetFramework", dotNet ? dotNet : "netstandard2.0");
+    }
+
+    {
+      Elem e1(e0, "ItemGroup");
+
+      std::vector<std::pair<std::string, std::pair<std::string, std::string>>>
+        filters;
+      filters.push_back(
+        std::pair("None", std::pair("Remove", "cmake_install.cmake")));
+      filters.push_back(std::pair(
+        "None",
+        std::pair("Remove", this->Name + ProjectFileExtension + ".filters")));
+      filters.push_back(
+        std::pair("Compile", std::pair("Remove", "CMakeFiles\\**")));
+      filters.push_back(
+        std::pair("EmbeddedResource", std::pair("Remove", "CMakeFiles\\**")));
+      filters.push_back(
+        std::pair("None", std::pair("Remove", "CMakeFiles\\**")));
+      filters.push_back(std::pair("None", std::pair("Remove", "Debug\\**")));
+      filters.push_back(std::pair("None", std::pair("Remove", "Release\\**")));
+
+      for (size_t i = 0; i < filters.size(); ++i) {
+        Elem e2(e1, filters[i].first.c_str());
+        e2.Attribute(filters[i].second.first.c_str(),
+                     filters[i].second.second.c_str());
+      }
+
+      std::string makeFileSrc = this->GeneratorTarget->Target->GetMakefile()
+                                  ->GetCurrentSourceDirectory();
+
+      if (0)
+      {
+        Elem e2(e1, "None");
+        e2.Attribute("Include", makeFileSrc + "/CMakeLists.txt");
+        e2.Element("Link", "CMakeLists.txt");
+      }
+    }
+
+    this->WriteAllSources(e0);
+    this->WriteDotNetPackages(e0);
+    this->WriteDotNetReferences(e0);
+    this->WriteProjectReferences(e0);
+    this->WriteCustomCommands(e0);
+  }
+
+  if (BuildFileStream.Close()) {
+    this->GlobalGenerator->FileReplacedDuringGenerate(PathToProjectFile);
+  }
+
+  // The groups are stored in a separate file for VS 10
+  this->WriteGroups();
+}
+
+#define VS10_UWP_CSharp_TARGETS                                               \
+  "$(MSBuildExtensionsPath)\\Microsoft\\WindowsXaml\\"                        \
+  "v$(VisualStudioVersion)\\Microsoft.Windows.UI.Xaml.CSharp.targets"
+
+void cmVisualStudio10TargetGenerator::GenerateCSXamarinUWP()
+{
+
+  const std::string ProjectFileExtension =
+    computeProjectFileExtension(this->GeneratorTarget);
+
+  std::string path = this->LocalGenerator->GetCurrentBinaryDirectory();
+  path += "/";
+  path += this->Name;
+  path += ProjectFileExtension;
+  cmGeneratedFileStream BuildFileStream(path);
+  const std::string PathToProjectFile = path;
+  BuildFileStream.SetCopyIfDifferent(true);
+
+  this->GeneratorTarget->Target->SetProperty("GENERATOR_FILE_NAME",
+                                             this->Name.c_str());
+  this->GeneratorTarget->Target->SetProperty("GENERATOR_FILE_NAME_EXT",
+                                             ProjectFileExtension.c_str());
+  this->DotNetHintReferences.clear();
+  this->AdditionalUsingDirectories.clear();
+  if (this->GeneratorTarget->GetType() <= cmStateEnums::OBJECT_LIBRARY) {
+    if (!this->ComputeClOptions()) {
+      return;
+    }
+    if (!this->ComputeRcOptions()) {
+      return;
+    }
+    if (!this->ComputeLinkOptions()) {
+      return;
+    }
+    if (!this->ComputeLibOptions()) {
+      return;
+    }
+  }
+
+  {
+    Elem e0(BuildFileStream, "Project");
+    e0.Attribute("DefaultTargets", "Build");
+    e0.Attribute("ToolsVersion", this->GlobalGenerator->GetToolsVersion());
+    e0.Attribute("xmlns",
+                 "http://schemas.microsoft.com/developer/msbuild/2003");
+
+    {
+      Elem e1(e0, "Import");
+      e1.Attribute("Project", VS10_CSharp_DEFAULT_PROPS);
+    }
+
+    {
+      Elem e1(e0, "PropertyGroup");
+      e1.Attribute("Label", "Globals");
+      e1.Element("ProjectGuid", "{87C990E9-E3B4-4603-AA5B-E70B00A38F04}");
+      e1.Element("OutputType", "AppContainerExe");
+      e1.Element("AppDesignerFolder", "Properties");
+      e1.Element("DefaultLanguage", "en-US");
+
+      e1.Element("TargetPlatformIdentifier", "UAP");
+      e1.Element("TargetPlatformVersion", "10.0.17134.0");
+      e1.Element("TargetPlatformMinVersion", "10.0.17134.0");
+      e1.Element("MinimumVisualStudioVersion", "14");
+      e1.Element("EnableDotNetNativeCompatibleProfile", "true");
+      e1.Element("FileAlignment", "512");
+      e1.Element("ProjectTypeGuids",
+                 "{A5A43C5B-DE2A-4C0C-9213-0A381AF9435A};{FAE04EC0-301F-11D3-"
+                 "BF4B-00C04F79EFBC}");
+      e1.Element("AppxBundlePlatforms", "x86");
+    }
+
+
+
+    this->WriteAllSources(e0);
+    this->WriteCustomCommands(e0);
+    this->WriteDotNetPackages(e0);
+    this->WriteDotNetReferences(e0);
+    this->WriteXamlFilesGroup(e0);
+    this->WriteProjectReferences(e0);
+
+    for (std::string const& c : this->Configurations) {
+      Elem e1(e0, "PropertyGroup");
+      e1.Attribute("Condition", this->CalcCondition(c));
+      e1.Attribute("Label", "Configuration");
+
+      if (this->MSTools) {
+        Options& o = *(this->ClOptions[c]);
+
+        std::string constants = "TRACE;NETFX_CORE;WINDOWS_UWP";
+
+        if (o.IsDebug()) {
+          e1.Element("DebugSymbols", "true");
+          e1.Element("DebugType", "full");
+
+          constants = "DEBUG;" + constants;
+        } else {
+          e1.Element("Optimize", "true");
+          e1.Element("DebugType", "pdbonly");
+          e1.Element("UseDotNetNativeToolchain", "false");
+        }
+
+        std::string outDir = this->GeneratorTarget->GetDirectory(c) + "/";
+        ConvertToWindowsSlash(outDir);
+        e1.Element("OutputPath", outDir);
+
+        e1.Element("DefineConstants", constants);
+        e1.Element("NoWarn", ";2008");
+        e1.Element("PlatformTarget", "x86");
+        e1.Element("UseVSHostingProcess", "false");
+        e1.Element("ErrorReport", "prompt");
+        e1.Element("Prefer32Bit", "true");
+      }
+    }
+
+    {
+      Elem e1(e0, "Import");
+      e1.Attribute("Project", VS10_UWP_CSharp_TARGETS);
+    }
+  }
+
+  if (BuildFileStream.Close()) {
+    this->GlobalGenerator->FileReplacedDuringGenerate(PathToProjectFile);
+  }
+
+  // The groups are stored in a separate file for VS 10
+  this->WriteGroups();
+}
+
+void cmVisualStudio10TargetGenerator::GenerateCSXamariniOS()
+{
+}
+
+void cmVisualStudio10TargetGenerator::GenerateCSXamarinAndroid()
+{
+}
+
 void cmVisualStudio10TargetGenerator::Generate()
 {
   // do not generate external ms projects
@@ -311,6 +577,7 @@ void cmVisualStudio10TargetGenerator::Generate()
     this->Managed = false;
   } else if (ProjectFileExtension == ".csproj") {
     if (this->GeneratorTarget->GetType() == cmStateEnums::STATIC_LIBRARY) {
+
       std::string message = "The C# target \"" +
         this->GeneratorTarget->GetName() +
         "\" is of type STATIC_LIBRARY. This is discouraged (and may be "
@@ -318,9 +585,31 @@ void cmVisualStudio10TargetGenerator::Generate()
       this->Makefile->IssueMessage(cmake::MessageType::DEPRECATION_WARNING,
                                    message);
     }
-    this->ProjectType = csproj;
+
+    const char* dotNet =
+      this->GeneratorTarget->Target->GetProperty("VS_DOTNET_STANDARD_VERSION");
+
+    if ((this->GeneratorTarget->GetType() == cmStateEnums::SHARED_LIBRARY) &&
+        dotNet != 0)
+      this->ProjectType = csstandard;
+    else
+      this->ProjectType = csproj;
     this->Managed = true;
+
+    if (this->ProjectType == csstandard) {
+      GenerateCSStandard();
+      return;
+    }
   }
+  const char* xamarinTarget =
+    this->GeneratorTarget->Target->GetSafeProperty("VS_XAMARIN_TARGET");
+
+  if (std::string(xamarinTarget) == "UWP") {
+    //"87C990E9-E3B4-4603-AA5B-E70B00A38F04";
+    GenerateCSXamarinUWP();
+    return;
+  }
+
   // Tell the global generator the name of the project file
   this->GeneratorTarget->Target->SetProperty("GENERATOR_FILE_NAME",
                                              this->Name.c_str());
@@ -364,10 +653,13 @@ void cmVisualStudio10TargetGenerator::Generate()
 
   // Write the encoding header into the file
   char magic[] = { char(0xEF), char(0xBB), char(0xBF) };
-  BuildFileStream.write(magic, 3);
-  BuildFileStream << "<?xml version=\"1.0\" encoding=\""
-                  << this->GlobalGenerator->Encoding() << "\"?>"
-                  << "\n";
+
+  if (this->ProjectType != csstandard) {
+    BuildFileStream.write(magic, 3);
+    BuildFileStream << "<?xml version=\"1.0\" encoding=\""
+                    << this->GlobalGenerator->Encoding() << "\"?>"
+                    << "\n";
+  }
   {
     Elem e0(BuildFileStream, "Project");
     e0.Attribute("DefaultTargets", "Build");
@@ -426,6 +718,8 @@ void cmVisualStudio10TargetGenerator::Generate()
         }
         e1.Element(tagName, vsProjectTypes);
       }
+
+      e1.Element("AutoGenerateBindingRedirects", "true");
 
       const char* vsProjectName =
         this->GeneratorTarget->GetProperty("VS_SCC_PROJECTNAME");
@@ -695,6 +989,38 @@ void cmVisualStudio10TargetGenerator::Generate()
   this->WriteGroups();
 }
 
+void cmVisualStudio10TargetGenerator::WriteDotNetPackages(Elem& e0)
+{
+  std::vector<std::string> references;
+  if (const char* vsDotNetReferences =
+        this->GeneratorTarget->GetProperty("VS_DOTNET_PACKAGES")) {
+    cmSystemTools::ExpandListArgument(vsDotNetReferences, references);
+  }
+  cmPropertyMap const& props = this->GeneratorTarget->Target->GetProperties();
+  for (auto const& i : props) {
+    if (i.first.find("VS_DOTNET_PACKAGES") == 0) {
+      std::string name = i.first.substr(18);
+      if (!name.empty()) {
+        std::string path = i.second.GetValue();
+        this->DotNetHintReferences[""].push_back(
+          DotNetHintReference(name, path));
+      }
+    }
+  }
+  if (!references.empty() || !this->DotNetHintReferences.empty()) {
+    Elem e1(e0, "ItemGroup");
+    for (std::string const& ri : references) {
+      this->WriteDotNetPackage(e1, ri, "", "");
+    }
+    for (const auto& h : this->DotNetHintReferences) {
+      // DotNetHintReferences is also populated from AddLibraries().
+      // The configuration specific hint references are added there.
+      for (const auto& i : h.second) {
+        this->WriteDotNetPackage(e1, i.first, i.second, h.first);
+      }
+    }
+  }
+}
 void cmVisualStudio10TargetGenerator::WriteDotNetReferences(Elem& e0)
 {
   std::vector<std::string> references;
@@ -743,6 +1069,34 @@ void cmVisualStudio10TargetGenerator::WriteDotNetReferences(Elem& e0)
   }
 }
 
+void cmVisualStudio10TargetGenerator::WriteDotNetPackage(
+  Elem& e1, std::string const& ref, std::string const& hint,
+  std::string const& config)
+{
+  Elem e2(e1, "PackageReference");
+
+  if (!hint.empty()) {
+    size_t pos = hint.find('@');
+    if (pos != -1) {
+      std::string lib = hint.substr(0, pos);
+      std::string ver = hint.substr(pos + 1, hint.size());
+      e2.Attribute("Include", lib);
+      e2.Attribute("Version", ver);
+    } else
+      e2.Attribute("Include", hint);
+
+  } else {
+    size_t pos = ref.find('@');
+    if (pos != -1) {
+      std::string lib = ref.substr(0, pos);
+      std::string ver = ref.substr(pos + 1, ref.size());
+      e2.Attribute("Include", lib);
+      e2.Attribute("Version", ver);
+    } else
+      e2.Attribute("Include", ref);
+  }
+}
+
 void cmVisualStudio10TargetGenerator::WriteDotNetReference(
   Elem& e1, std::string const& ref, std::string const& hint,
   std::string const& config)
@@ -768,7 +1122,6 @@ void cmVisualStudio10TargetGenerator::WriteDotNetReference(
     e2.Element("Private", privateReference);
     e2.Element("HintPath", hint);
   }
-  this->WriteDotNetReferenceCustomTags(e2, ref);
 }
 
 void cmVisualStudio10TargetGenerator::WriteDotNetReferenceCustomTags(
@@ -1192,6 +1545,29 @@ void cmVisualStudio10TargetGenerator::WriteNsightTegraConfigurationValues(
   }
 }
 
+
+void cmVisualStudio10TargetGenerator::ComputeCustomCommands()
+{
+  if (this->ProjectType == csstandard) {
+    this->CSharpCustomCommandNames.clear();
+    std::vector<cmSourceFile const*> customCommands;
+    this->GeneratorTarget->GetCustomCommands(customCommands, "");
+    for (cmSourceFile const* si : customCommands) {
+
+        std::string sourcePath = si->GetFullPath();
+
+        for (std::string& c : this->Configurations)
+        {
+          std::string name = "CustomCommand_" + c + "_" +
+            cmSystemTools::ComputeStringMD5(sourcePath);
+
+          this->CSharpCustomCommandNames.insert(name);
+        }
+    }
+  }
+}
+
+
 void cmVisualStudio10TargetGenerator::WriteCustomCommands(Elem& e0)
 {
   this->CSharpCustomCommandNames.clear();
@@ -1266,7 +1642,7 @@ void cmVisualStudio10TargetGenerator::WriteCustomRule(
 
   std::unique_ptr<Elem> spe1;
   std::unique_ptr<Elem> spe2;
-  if (this->ProjectType != csproj) {
+  if (this->ProjectType != csproj && this->ProjectType != csstandard) {
     spe1 = cm::make_unique<Elem>(e0, "ItemGroup");
     spe2 = cm::make_unique<Elem>(*spe1, "CustomBuild");
     this->WriteSource(*spe2, source);
@@ -1286,6 +1662,7 @@ void cmVisualStudio10TargetGenerator::WriteCustomRule(
     cmCustomCommandGenerator ccg(command, c, lg);
     std::string comment = lg->ConstructComment(ccg);
     comment = cmVS10EscapeComment(comment);
+
     std::string script = lg->ConstructScript(ccg);
     // input files for custom command
     std::stringstream inputs;
@@ -1306,12 +1683,18 @@ void cmVisualStudio10TargetGenerator::WriteCustomRule(
       outputs << sep << out;
       sep = ";";
     }
-    if (this->ProjectType == csproj) {
+    if (this->ProjectType == csproj || this->ProjectType == csstandard) {
       std::string name = "CustomCommand_" + c + "_" +
         cmSystemTools::ComputeStringMD5(sourcePath);
       this->WriteCustomRuleCSharp(e0, c, name, script, inputs.str(),
                                   outputs.str(), comment);
-    } else {
+    } /*else if (this->ProjectType == csstandard) {
+      std::string name = "CustomCommand_" + c + "_" +
+        cmSystemTools::ComputeStringMD5(sourcePath);
+      this->WriteCustomRuleCSharpSTD(e0, c, name, script, inputs.str(),
+                                     outputs.str(), comment);
+    }  */
+    else {
       this->WriteCustomRuleCpp(*spe2, c, script, inputs.str(), outputs.str(),
                                comment);
     }
@@ -1350,6 +1733,19 @@ void cmVisualStudio10TargetGenerator::WriteCustomRuleCSharp(
   if (!comment.empty()) {
     Elem(e1, "Exec").Attribute("Command", "echo " + comment);
   }
+  Elem(e1, "Exec").Attribute("Command", script);
+}
+
+void cmVisualStudio10TargetGenerator::WriteCustomRuleCSharpSTD(
+  Elem& e0, std::string const& config, std::string const& name,
+  std::string const& script, std::string const& inputs,
+  std::string const& outputs, std::string const& comment)
+{
+  this->CSharpCustomCommandNames.insert(name);
+  Elem e1(e0, "Target");
+  e1.Attribute("Name", name);
+  e1.Attribute("Inputs", cmVS10EscapeAttr(inputs));
+  e1.Attribute("Outputs", cmVS10EscapeAttr(outputs));
   Elem(e1, "Exec").Attribute("Command", script);
 }
 
@@ -1591,7 +1987,7 @@ void cmVisualStudio10TargetGenerator::WriteExtraSource(Elem& e1,
   std::string copyToOutDir;
   std::string includeInVsix;
   std::string ext = cmSystemTools::LowerCase(sf->GetExtension());
-  if (this->ProjectType == csproj) {
+  if (this->ProjectType == csproj || this->ProjectType == csstandard) {
     // EVERY extra source file must have a <Link>, otherwise it might not
     // be visible in Visual Studio at all. The path relative to current
     // source- or binary-dir is used within the link, if the file is
@@ -1971,6 +2367,13 @@ void cmVisualStudio10TargetGenerator::WriteAllSources(Elem& e0)
           tool = "ResourceCompile";
         } else if (lang == "CSharp") {
           tool = "Compile";
+
+          const char* toolOverride =
+            si.Source->GetProperty("VS_TOOL_OVERRIDE");
+          if (toolOverride && *toolOverride) {
+            tool = toolOverride;
+          }
+
         } else if (lang == "CUDA" && this->GlobalGenerator->IsCudaEnabled()) {
           tool = "CudaCompile";
         } else {
@@ -2172,7 +2575,7 @@ void cmVisualStudio10TargetGenerator::OutputSourceSpecificFlags(
     std::string xamlFileName = fileName.substr(0, fileName.find_last_of("."));
     e2.Element("DependentUpon", xamlFileName);
   }
-  if (this->ProjectType == csproj) {
+  if (this->ProjectType == csproj || this->ProjectType == csstandard) {
     std::string f = source->GetFullPath();
     typedef std::map<std::string, std::string> CsPropMap;
     CsPropMap sourceFileTags;
@@ -2426,6 +2829,7 @@ bool cmVisualStudio10TargetGenerator::ComputeClOptions(
       pOptions = cm::make_unique<Options>(
         this->LocalGenerator, Options::Compiler, gg->GetClFlagTable());
       break;
+    case csstandard:
     case csproj:
       pOptions =
         cm::make_unique<Options>(this->LocalGenerator, Options::CSharpCompiler,
@@ -2547,6 +2951,7 @@ bool cmVisualStudio10TargetGenerator::ComputeClOptions(
                                                      langForClCompile);
       }
       break;
+    case csstandard:
     case csproj:
       this->GeneratorTarget->GetCompileDefinitions(targetDefines, configName,
                                                    "CSharp");
@@ -3786,6 +4191,10 @@ void cmVisualStudio10TargetGenerator::WriteProjectReferences(Elem& e0)
     if (dt->GetType() == cmStateEnums::INTERFACE_LIBRARY) {
       continue;
     }
+
+    if (this->csstandard && dt->GetName() == "ZERO_CHECK")
+      continue;
+
     // skip fortran targets as they can not be processed by MSBuild
     // the only reference will be in the .sln file
     if (this->GlobalGenerator->TargetIsFortranOnly(dt)) {

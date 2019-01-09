@@ -40,7 +40,7 @@ public:
 
 protected:
   const char* ReportErrorLabel() const override;
-  bool CustomCommandUseLocal() const override { return true; }
+  bool CustomCommandUseLocal() const override { return false; }
 
 private:
   void GenerateTargetsDepthFirst(cmGeneratorTarget* target,
