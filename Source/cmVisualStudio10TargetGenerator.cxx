@@ -374,6 +374,20 @@ void cmVisualStudio10TargetGenerator::GenerateCSStandard()
     {
       Elem e1(e0, "PropertyGroup");
       e1.Element("TargetFramework", dotNet ? dotNet : "netstandard2.0");
+      e1.Element("ProjectGuid", "{" + this->GUID + "}");
+
+      std::vector<std::string> keys = this->GeneratorTarget->GetPropertyKeys();
+      for (std::string const& keyIt : keys) {
+        static const char* prefix = "VS_GLOBAL_";
+        if (keyIt.find(prefix) != 0)
+          continue;
+        std::string globalKey = keyIt.substr(strlen(prefix));
+        const char* value = this->GeneratorTarget->GetProperty(keyIt);
+        if (!value)
+          continue;
+        e1.Element(globalKey.c_str(), value);
+      }
+
     }
 
     {
@@ -403,13 +417,6 @@ void cmVisualStudio10TargetGenerator::GenerateCSStandard()
 
       std::string makeFileSrc = this->GeneratorTarget->Target->GetMakefile()
                                   ->GetCurrentSourceDirectory();
-
-      if (0)
-      {
-        Elem e2(e1, "None");
-        e2.Attribute("Include", makeFileSrc + "/CMakeLists.txt");
-        e2.Element("Link", "CMakeLists.txt");
-      }
     }
 
     this->WriteAllSources(e0);
@@ -417,6 +424,7 @@ void cmVisualStudio10TargetGenerator::GenerateCSStandard()
     this->WriteDotNetReferences(e0);
     this->WriteProjectReferences(e0);
     this->WriteCustomCommands(e0);
+    this->WriteXamlFilesGroup(e0);
   }
 
   if (BuildFileStream.Close()) {
@@ -481,20 +489,28 @@ void cmVisualStudio10TargetGenerator::GenerateCSXamarinUWP()
     {
       Elem e1(e0, "PropertyGroup");
       e1.Attribute("Label", "Globals");
-      e1.Element("ProjectGuid", "{"+ this->GUID +"}");
+      e1.Element("ProjectGuid", "{" + this->GUID + "}");
 
       if (this->GeneratorTarget->GetType() == cmStateEnums::EXECUTABLE)
         e1.Element("OutputType", "AppContainerExe");
       else
-          e1.Element("OutputType", "Library");
+        e1.Element("OutputType", "Library");
 
       e1.Element("AppDesignerFolder", "Properties");
       e1.Element("DefaultLanguage", "en-US");
 
-      e1.Element("TargetPlatformIdentifier", "UAP");
-      e1.Element("TargetPlatformVersion", "10.0.17134.0");
-      e1.Element("TargetPlatformMinVersion", "10.0.17134.0");
-      e1.Element("MinimumVisualStudioVersion", "14");
+      std::vector<std::string> keys = this->GeneratorTarget->GetPropertyKeys();
+      for (std::string const& keyIt : keys) {
+        static const char* prefix = "VS_GLOBAL_";
+        if (keyIt.find(prefix) != 0)
+          continue;
+        std::string globalKey = keyIt.substr(strlen(prefix));
+        const char* value = this->GeneratorTarget->GetProperty(keyIt);
+        if (!value)
+          continue;
+        e1.Element(globalKey.c_str(), value);
+      }
+
       e1.Element("EnableDotNetNativeCompatibleProfile", "true");
       e1.Element("FileAlignment", "512");
       e1.Element("ProjectTypeGuids",
@@ -502,15 +518,6 @@ void cmVisualStudio10TargetGenerator::GenerateCSXamarinUWP()
                  "BF4B-00C04F79EFBC}");
       e1.Element("AppxBundlePlatforms", "x86");
     }
-
-
-
-    this->WriteAllSources(e0);
-    this->WriteCustomCommands(e0);
-    this->WriteDotNetPackages(e0);
-    this->WriteDotNetReferences(e0);
-    this->WriteXamlFilesGroup(e0);
-    this->WriteProjectReferences(e0);
 
     for (std::string const& c : this->Configurations) {
       Elem e1(e0, "PropertyGroup");
@@ -544,7 +551,20 @@ void cmVisualStudio10TargetGenerator::GenerateCSXamarinUWP()
         e1.Element("ErrorReport", "prompt");
         e1.Element("Prefer32Bit", "true");
       }
-    }
+      }
+
+
+
+
+
+
+    this->WriteAllSources(e0);
+    this->WriteCustomCommands(e0);
+    this->WriteDotNetPackages(e0);
+    this->WriteDotNetReferences(e0);
+    this->WriteXamlFilesGroup(e0);
+    this->WriteProjectReferences(e0);
+
 
     {
       Elem e1(e0, "Import");
@@ -610,7 +630,6 @@ void cmVisualStudio10TargetGenerator::Generate()
     this->GeneratorTarget->Target->GetSafeProperty("VS_XAMARIN_TARGET");
 
   if (std::string(xamarinTarget) == "UWP") {
-    //"87C990E9-E3B4-4603-AA5B-E70B00A38F04";
     GenerateCSXamarinUWP();
     return;
   }
@@ -1272,7 +1291,8 @@ void cmVisualStudio10TargetGenerator::WriteXamlFilesGroup(Elem& e0)
       Elem e2(e1, xamlType);
       this->WriteSource(e2, oi);
       e2.SetHasElements();
-      if (this->ProjectType == csproj && !this->InSourceBuild) {
+      if ((this->ProjectType == csproj ||
+          this->ProjectType == csstandard) && !this->InSourceBuild) {
         // add <Link> tag to written XAML source if necessary
         const std::string& srcDir =
           this->Makefile->GetCurrentSourceDirectory();
