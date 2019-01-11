@@ -41,11 +41,21 @@ public:
     VS15 = 150
   };
 
-  cmGlobalVisualStudioGenerator(cmake* cm);
   virtual ~cmGlobalVisualStudioGenerator();
 
   VSVersion GetVersion() const;
   void SetVersion(VSVersion v);
+
+  /** Is the installed VS an Express edition?  */
+  bool IsExpressEdition() const { return this->ExpressEdition; }
+
+  bool SetGeneratorPlatform(std::string const& p, cmMakefile* mf) override;
+
+  /**
+   * Get the name of the target platform (architecture) for which we generate.
+   * The names are as defined by VS, e.g. "Win32", "x64", "Itanium", "ARM".
+   */
+  std::string const& GetPlatformName() const;
 
   /**
    * Configure CMake's Visual Studio macros file into the user's Visual
@@ -130,6 +140,9 @@ public:
             bool dryRun) override;
 
 protected:
+  cmGlobalVisualStudioGenerator(cmake* cm,
+                                std::string const& platformInGeneratorName);
+
   void AddExtraIDETargets() override;
 
   // Does this VS version link targets to each other if there are
@@ -137,7 +150,9 @@ protected:
   // below 8.
   virtual bool VSLinksDependencies() const { return true; }
 
-  virtual const char* GetIDEVersion() const = 0;
+  const char* GetIDEVersion() const;
+
+  void WriteSLNHeader(std::ostream& fout);
 
   bool ComputeTargetDepends() override;
   class VSDependSet : public std::set<std::string>
@@ -159,6 +174,11 @@ protected:
 
 protected:
   VSVersion Version;
+  bool ExpressEdition;
+
+  std::string GeneratorPlatform;
+  std::string DefaultPlatformName;
+  bool PlatformInGeneratorName = false;
 
 private:
   virtual std::string GetVSMakeProgram() = 0;

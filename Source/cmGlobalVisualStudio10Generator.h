@@ -14,8 +14,6 @@
 class cmGlobalVisualStudio10Generator : public cmGlobalVisualStudio8Generator
 {
 public:
-  cmGlobalVisualStudio10Generator(cmake* cm, const std::string& name,
-                                  const std::string& platformName);
   static cmGlobalGeneratorFactory* NewFactory();
 
   bool MatchesGeneratorName(const std::string& name) const override;
@@ -43,7 +41,6 @@ public:
    */
   void EnableLanguage(std::vector<std::string> const& languages, cmMakefile*,
                       bool optional) override;
-  void WriteSLNHeader(std::ostream& fout) override;
 
   bool IsCudaEnabled() const { return this->CudaEnabled; }
 
@@ -104,7 +101,7 @@ public:
                    std::string const& sfRel);
 
   std::string Encoding() override;
-  virtual const char* GetToolsVersion() { return "4.0"; }
+  const char* GetToolsVersion() const;
 
   virtual bool IsDefaultToolset(const std::string& version) const;
   virtual std::string GetAuxiliaryToolset() const;
@@ -126,6 +123,9 @@ public:
   cmIDEFlagTable const* GetNasmFlagTable() const;
 
 protected:
+  cmGlobalVisualStudio10Generator(cmake* cm, const std::string& name,
+                                  std::string const& platformInGeneratorName);
+
   void Generate() override;
   virtual bool InitializeSystem(cmMakefile* mf);
   virtual bool InitializeWindows(cmMakefile* mf);
@@ -139,8 +139,6 @@ protected:
   virtual std::string SelectWindowsCEToolset() const;
   virtual bool SelectWindowsPhoneToolset(std::string& toolset) const;
   virtual bool SelectWindowsStoreToolset(std::string& toolset) const;
-
-  const char* GetIDEVersion() const override { return "10.0"; }
 
   std::string const& GetMSBuildCommand();
 
@@ -171,6 +169,8 @@ protected:
 
 private:
   class Factory;
+  friend class Factory;
+
   struct LongestSourcePath
   {
     LongestSourcePath()

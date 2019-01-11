@@ -18,15 +18,9 @@ class cmake;
 class cmGlobalVisualStudio15Generator : public cmGlobalVisualStudio14Generator
 {
 public:
-  cmGlobalVisualStudio15Generator(cmake* cm, const std::string& name,
-                                  const std::string& platformName);
   static cmGlobalGeneratorFactory* NewFactory();
 
   bool MatchesGeneratorName(const std::string& name) const override;
-
-  void WriteSLNHeader(std::ostream& fout) override;
-
-  const char* GetToolsVersion() override { return "15.0"; }
 
   bool SetGeneratorInstance(std::string const& i, cmMakefile* mf) override;
 
@@ -36,10 +30,11 @@ public:
   std::string GetAuxiliaryToolset() const override;
 
 protected:
+  cmGlobalVisualStudio15Generator(cmake* cm, const std::string& name,
+                                  std::string const& platformInGeneratorName);
+
   bool InitializeWindows(cmMakefile* mf) override;
   bool SelectWindowsStoreToolset(std::string& toolset) const override;
-
-  const char* GetIDEVersion() const override { return "15.0"; }
 
   // Used to verify that the Desktop toolset for the current generator is
   // installed on the machine.
@@ -59,6 +54,7 @@ protected:
 
 private:
   class Factory;
+  friend class Factory;
   mutable cmVSSetupAPIHelper vsSetupAPIHelper;
 };
 #endif

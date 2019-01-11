@@ -90,8 +90,9 @@ cmGlobalGeneratorFactory* cmGlobalVisualStudio10Generator::NewFactory()
 }
 
 cmGlobalVisualStudio10Generator::cmGlobalVisualStudio10Generator(
-  cmake* cm, const std::string& name, const std::string& platformName)
-  : cmGlobalVisualStudio8Generator(cm, name, platformName)
+  cmake* cm, const std::string& name,
+  std::string const& platformInGeneratorName)
+  : cmGlobalVisualStudio8Generator(cm, name, platformInGeneratorName)
 {
   std::string vc10Express;
   this->ExpressEdition = cmSystemTools::ReadRegistryValue(
@@ -406,7 +407,7 @@ bool cmGlobalVisualStudio10Generator::InitializeSystem(cmMakefile* mf)
       return false;
     }
   } else if (this->SystemName == "Android") {
-    if (this->DefaultPlatformName != "Win32") {
+    if (this->PlatformInGeneratorName) {
       std::ostringstream e;
       e << "CMAKE_SYSTEM_NAME is 'Android' but CMAKE_GENERATOR "
         << "specifies a platform too: '" << this->GetName() << "'";
@@ -437,7 +438,7 @@ bool cmGlobalVisualStudio10Generator::InitializeWindows(cmMakefile*)
 
 bool cmGlobalVisualStudio10Generator::InitializeWindowsCE(cmMakefile* mf)
 {
-  if (this->DefaultPlatformName != "Win32") {
+  if (this->PlatformInGeneratorName) {
     std::ostringstream e;
     e << "CMAKE_SYSTEM_NAME is 'WindowsCE' but CMAKE_GENERATOR "
       << "specifies a platform too: '" << this->GetName() << "'";
@@ -486,16 +487,6 @@ std::string cmGlobalVisualStudio10Generator::SelectWindowsCEToolset() const
     return "CE800";
   }
   return "";
-}
-
-void cmGlobalVisualStudio10Generator::WriteSLNHeader(std::ostream& fout)
-{
-  fout << "Microsoft Visual Studio Solution File, Format Version 11.00\n";
-  if (this->ExpressEdition) {
-    fout << "# Visual C++ Express 2010\n";
-  } else {
-    fout << "# Visual Studio 2010\n";
-  }
 }
 
 ///! Create a local generator appropriate to this Global Generator
@@ -1022,6 +1013,27 @@ void cmGlobalVisualStudio10Generator::PathTooLong(cmGeneratorTarget* target,
 std::string cmGlobalVisualStudio10Generator::Encoding()
 {
   return "utf-8";
+}
+
+const char* cmGlobalVisualStudio10Generator::GetToolsVersion() const
+{
+  switch (this->Version) {
+    case cmGlobalVisualStudioGenerator::VS9:
+    case cmGlobalVisualStudioGenerator::VS10:
+    case cmGlobalVisualStudioGenerator::VS11:
+      return "4.0";
+
+      // in Visual Studio 2013 they detached the MSBuild tools version
+      // from the .Net Framework version and instead made it have it's own
+      // version number
+    case cmGlobalVisualStudioGenerator::VS12:
+      return "12.0";
+    case cmGlobalVisualStudioGenerator::VS14:
+      return "14.0";
+    case cmGlobalVisualStudioGenerator::VS15:
+      return "15.0";
+  }
+  return "";
 }
 
 bool cmGlobalVisualStudio10Generator::IsNsightTegra() const

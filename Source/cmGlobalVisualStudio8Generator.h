@@ -13,9 +13,6 @@
 class cmGlobalVisualStudio8Generator : public cmGlobalVisualStudio71Generator
 {
 public:
-  cmGlobalVisualStudio8Generator(cmake* cm, const std::string& name,
-                                 const std::string& platformName);
-
   ///! Get the name for the generator.
   std::string GetName() const override { return this->Name; }
 
@@ -44,12 +41,11 @@ public:
     return !this->WindowsCEVersion.empty();
   }
 
-  /** Is the installed VS an Express edition?  */
-  bool IsExpressEdition() const { return this->ExpressEdition; }
-
 protected:
+  cmGlobalVisualStudio8Generator(cmake* cm, const std::string& name,
+                                 std::string const& platformInGeneratorName);
+
   void AddExtraIDETargets() override;
-  const char* GetIDEVersion() const override { return "8.0"; }
 
   std::string FindDevEnvCommand() override;
 
@@ -77,6 +73,5 @@ protected:
 
   std::string Name;
   std::string WindowsCEVersion;
-  bool ExpressEdition;
 };
 #endif

@@ -76,8 +76,9 @@ cmGlobalGeneratorFactory* cmGlobalVisualStudio15Generator::NewFactory()
 }
 
 cmGlobalVisualStudio15Generator::cmGlobalVisualStudio15Generator(
-  cmake* cm, const std::string& name, const std::string& platformName)
-  : cmGlobalVisualStudio14Generator(cm, name, platformName)
+  cmake* cm, const std::string& name,
+  std::string const& platformInGeneratorName)
+  : cmGlobalVisualStudio14Generator(cm, name, platformInGeneratorName)
 {
   this->ExpressEdition = false;
   this->DefaultPlatformToolset = "v141";
@@ -95,17 +96,6 @@ bool cmGlobalVisualStudio15Generator::MatchesGeneratorName(
     return genName == this->GetName();
   }
   return false;
-}
-
-void cmGlobalVisualStudio15Generator::WriteSLNHeader(std::ostream& fout)
-{
-  // Visual Studio 15 writes .sln format 12.00
-  fout << "Microsoft Visual Studio Solution File, Format Version 12.00\n";
-  if (this->ExpressEdition) {
-    fout << "# Visual Studio Express 15 for Windows Desktop\n";
-  } else {
-    fout << "# Visual Studio 15\n";
-  }
 }
 
 bool cmGlobalVisualStudio15Generator::SetGeneratorInstance(

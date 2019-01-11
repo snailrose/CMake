@@ -75,8 +75,9 @@ cmGlobalGeneratorFactory* cmGlobalVisualStudio14Generator::NewFactory()
 }
 
 cmGlobalVisualStudio14Generator::cmGlobalVisualStudio14Generator(
-  cmake* cm, const std::string& name, const std::string& platformName)
-  : cmGlobalVisualStudio12Generator(cm, name, platformName)
+  cmake* cm, const std::string& name,
+  std::string const& platformInGeneratorName)
+  : cmGlobalVisualStudio12Generator(cm, name, platformInGeneratorName)
 {
   std::string vc14Express;
   this->ExpressEdition = cmSystemTools::ReadRegistryValue(
@@ -172,17 +173,6 @@ bool cmGlobalVisualStudio14Generator::SelectWindowsStoreToolset(
   }
   return this->cmGlobalVisualStudio12Generator::SelectWindowsStoreToolset(
     toolset);
-}
-
-void cmGlobalVisualStudio14Generator::WriteSLNHeader(std::ostream& fout)
-{
-  // Visual Studio 14 writes .sln format 12.00
-  fout << "Microsoft Visual Studio Solution File, Format Version 12.00\n";
-  if (this->ExpressEdition) {
-    fout << "# Visual Studio Express 14 for Windows Desktop\n";
-  } else {
-    fout << "# Visual Studio 14\n";
-  }
 }
 
 bool cmGlobalVisualStudio14Generator::IsWindowsDesktopToolsetInstalled() const

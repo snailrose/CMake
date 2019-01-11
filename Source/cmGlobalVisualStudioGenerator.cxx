@@ -20,12 +20,20 @@
 #include "cmState.h"
 #include "cmTarget.h"
 
-cmGlobalVisualStudioGenerator::cmGlobalVisualStudioGenerator(cmake* cm)
+cmGlobalVisualStudioGenerator::cmGlobalVisualStudioGenerator(
+  cmake* cm, std::string const& platformInGeneratorName)
   : cmGlobalGenerator(cm)
 {
   cm->GetState()->SetIsGeneratorMultiConfig(true);
   cm->GetState()->SetWindowsShell(true);
   cm->GetState()->SetWindowsVSIDE(true);
+
+  if (platformInGeneratorName.empty()) {
+    this->DefaultPlatformName = "Win32";
+  } else {
+    this->DefaultPlatformName = platformInGeneratorName;
+    this->PlatformInGeneratorName = true;
+  }
 }
 
 cmGlobalVisualStudioGenerator::~cmGlobalVisualStudioGenerator()
@@ -41,6 +49,97 @@ cmGlobalVisualStudioGenerator::GetVersion() const
 void cmGlobalVisualStudioGenerator::SetVersion(VSVersion v)
 {
   this->Version = v;
+}
+
+bool cmGlobalVisualStudioGenerator::SetGeneratorPlatform(std::string const& p,
+                                                         cmMakefile* mf)
+{
+  if (this->GetPlatformName() == "x64") {
+    mf->AddDefinition("CMAKE_FORCE_WIN64", "TRUE");
+  } else if (this->GetPlatformName() == "Itanium") {
+    mf->AddDefinition("CMAKE_FORCE_IA64", "TRUE");
+  }
+  mf->AddDefinition("CMAKE_VS_PLATFORM_NAME", this->GetPlatformName().c_str());
+  return this->cmGlobalGenerator::SetGeneratorPlatform(p, mf);
+}
+
+std::string const& cmGlobalVisualStudioGenerator::GetPlatformName() const
+{
+  if (!this->GeneratorPlatform.empty()) {
+    return this->GeneratorPlatform;
+  }
+  return this->DefaultPlatformName;
+}
+
+const char* cmGlobalVisualStudioGenerator::GetIDEVersion() const
+{
+  switch (this->Version) {
+    case cmGlobalVisualStudioGenerator::VS9:
+      return "9.0";
+    case cmGlobalVisualStudioGenerator::VS10:
+      return "10.0";
+    case cmGlobalVisualStudioGenerator::VS11:
+      return "11.0";
+    case cmGlobalVisualStudioGenerator::VS12:
+      return "12.0";
+    case cmGlobalVisualStudioGenerator::VS14:
+      return "14.0";
+    case cmGlobalVisualStudioGenerator::VS15:
+      return "15.0";
+  }
+  return "";
+}
+
+void cmGlobalVisualStudioGenerator::WriteSLNHeader(std::ostream& fout)
+{
+  switch (this->Version) {
+    case cmGlobalVisualStudioGenerator::VS9:
+      fout << "Microsoft Visual Studio Solution File, Format Version 10.00\n";
+      fout << "# Visual Studio 2008\n";
+      break;
+    case cmGlobalVisualStudioGenerator::VS10:
+      fout << "Microsoft Visual Studio Solution File, Format Version 11.00\n";
+      if (this->ExpressEdition) {
+        fout << "# Visual C++ Express 2010\n";
+      } else {
+        fout << "# Visual Studio 2010\n";
+      }
+      break;
+    case cmGlobalVisualStudioGenerator::VS11:
+      fout << "Microsoft Visual Studio Solution File, Format Version 12.00\n";
+      if (this->ExpressEdition) {
+        fout << "# Visual Studio Express 2012 for Windows Desktop\n";
+      } else {
+        fout << "# Visual Studio 2012\n";
+      }
+      break;
+    case cmGlobalVisualStudioGenerator::VS12:
+      fout << "Microsoft Visual Studio Solution File, Format Version 12.00\n";
+      if (this->ExpressEdition) {
+        fout << "# Visual Studio Express 2013 for Windows Desktop\n";
+      } else {
+        fout << "# Visual Studio 2013\n";
+      }
+      break;
+    case cmGlobalVisualStudioGenerator::VS14:
+      // Visual Studio 14 writes .sln format 12.00
+      fout << "Microsoft Visual Studio Solution File, Format Version 12.00\n";
+      if (this->ExpressEdition) {
+        fout << "# Visual Studio Express 14 for Windows Desktop\n";
+      } else {
+        fout << "# Visual Studio 14\n";
+      }
+      break;
+    case cmGlobalVisualStudioGenerator::VS15:
+      // Visual Studio 15 writes .sln format 12.00
+      fout << "Microsoft Visual Studio Solution File, Format Version 12.00\n";
+      if (this->ExpressEdition) {
+        fout << "# Visual Studio Express 15 for Windows Desktop\n";
+      } else {
+        fout << "# Visual Studio 15\n";
+      }
+      break;
+  }
 }
 
 std::string cmGlobalVisualStudioGenerator::GetRegistryBase()

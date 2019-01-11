@@ -92,8 +92,9 @@ cmGlobalGeneratorFactory* cmGlobalVisualStudio11Generator::NewFactory()
 }
 
 cmGlobalVisualStudio11Generator::cmGlobalVisualStudio11Generator(
-  cmake* cm, const std::string& name, const std::string& platformName)
-  : cmGlobalVisualStudio10Generator(cm, name, platformName)
+  cmake* cm, const std::string& name,
+  std::string const& platformInGeneratorName)
+  : cmGlobalVisualStudio10Generator(cm, name, platformInGeneratorName)
 {
   std::string vc11Express;
   this->ExpressEdition = cmSystemTools::ReadRegistryValue(
@@ -186,16 +187,6 @@ bool cmGlobalVisualStudio11Generator::SelectWindowsStoreToolset(
   }
   return this->cmGlobalVisualStudio10Generator::SelectWindowsStoreToolset(
     toolset);
-}
-
-void cmGlobalVisualStudio11Generator::WriteSLNHeader(std::ostream& fout)
-{
-  fout << "Microsoft Visual Studio Solution File, Format Version 12.00\n";
-  if (this->ExpressEdition) {
-    fout << "# Visual Studio Express 2012 for Windows Desktop\n";
-  } else {
-    fout << "# Visual Studio 2012\n";
-  }
 }
 
 bool cmGlobalVisualStudio11Generator::UseFolderProperty() const

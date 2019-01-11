@@ -83,8 +83,9 @@ cmGlobalGeneratorFactory* cmGlobalVisualStudio9Generator::NewFactory()
 }
 
 cmGlobalVisualStudio9Generator::cmGlobalVisualStudio9Generator(
-  cmake* cm, const std::string& name, const std::string& platformName)
-  : cmGlobalVisualStudio8Generator(cm, name, platformName)
+  cmake* cm, const std::string& name,
+  std::string const& platformInGeneratorName)
+  : cmGlobalVisualStudio8Generator(cm, name, platformInGeneratorName)
 {
   this->Version = VS9;
   std::string vc9Express;
@@ -92,12 +93,6 @@ cmGlobalVisualStudio9Generator::cmGlobalVisualStudio9Generator(
     "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\VCExpress\\9.0\\Setup\\VC;"
     "ProductDir",
     vc9Express, cmSystemTools::KeyWOW64_32);
-}
-
-void cmGlobalVisualStudio9Generator::WriteSLNHeader(std::ostream& fout)
-{
-  fout << "Microsoft Visual Studio Solution File, Format Version 10.00\n";
-  fout << "# Visual Studio 2008\n";
 }
 
 std::string cmGlobalVisualStudio9Generator::GetUserMacrosDirectory()
