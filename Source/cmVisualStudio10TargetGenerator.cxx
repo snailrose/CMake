@@ -414,9 +414,6 @@ void cmVisualStudio10TargetGenerator::GenerateCSStandard()
         e2.Attribute(filters[i].second.first.c_str(),
                      filters[i].second.second.c_str());
       }
-
-      std::string makeFileSrc = this->GeneratorTarget->Target->GetMakefile()
-                                  ->GetCurrentSourceDirectory();
     }
 
     this->WriteAllSources(e0);
@@ -477,9 +474,23 @@ void cmVisualStudio10TargetGenerator::GenerateCSXamarinUWP()
   {
     Elem e0(BuildFileStream, "Project");
     e0.Attribute("DefaultTargets", "Build");
+    this->ComputeCustomCommands();
+    if (!this->CSharpCustomCommandNames.empty()) {
+      std::string ini = "";
+      size_t size = this->CSharpCustomCommandNames.size(), i = 0;
+
+      for (std::string name : this->CSharpCustomCommandNames) {
+        ini += name;
+
+        if (i + 1 < size)
+          ini += ";";
+        ++i;
+      }
+      e0.Attribute("InitialTargets", ini);
+    }
+
     e0.Attribute("ToolsVersion", this->GlobalGenerator->GetToolsVersion());
-    e0.Attribute("xmlns",
-                 "http://schemas.microsoft.com/developer/msbuild/2003");
+    e0.Attribute("xmlns","http://schemas.microsoft.com/developer/msbuild/2003");
 
     {
       Elem e1(e0, "Import");
@@ -551,12 +562,7 @@ void cmVisualStudio10TargetGenerator::GenerateCSXamarinUWP()
         e1.Element("ErrorReport", "prompt");
         e1.Element("Prefer32Bit", "true");
       }
-      }
-
-
-
-
-
+    }
 
     this->WriteAllSources(e0);
     this->WriteCustomCommands(e0);
@@ -564,8 +570,27 @@ void cmVisualStudio10TargetGenerator::GenerateCSXamarinUWP()
     this->WriteDotNetReferences(e0);
     this->WriteXamlFilesGroup(e0);
     this->WriteProjectReferences(e0);
+    // make sure custom commands are executed before build (if necessary)
 
-
+    for (std::string const& c : this->Configurations) {
+      Elem e1(e0, "PropertyGroup");
+      e1.Attribute("Condition", "'$(Configuration)' == '" + c + "'");
+      e1.SetHasElements();
+      this->WriteEvents(e1, c);
+    }
+      
+    {
+      Elem e1(e0, "PropertyGroup");
+      std::ostringstream oss;
+      oss << "\n";
+      for (std::string const& i : this->CSharpCustomCommandNames) {
+        oss << "      " << i << ";\n";
+      }
+      oss << "      "
+          << "$(BuildDependsOn)\n";
+      e1.Element("BuildDependsOn", oss.str());
+    }
+ 
     {
       Elem e1(e0, "Import");
       e1.Attribute("Project", VS10_UWP_CSharp_TARGETS);
@@ -1279,6 +1304,7 @@ void cmVisualStudio10TargetGenerator::WriteXamlFilesGroup(Elem& e0)
   if (!xamlObjs.empty()) {
     Elem e1(e0, "ItemGroup");
     for (cmSourceFile const* oi : xamlObjs) {
+
       std::string obj = oi->GetFullPath();
       const char* xamlType;
       const char* xamlTypeProperty = oi->GetProperty("VS_XAML_TYPE");
@@ -1287,6 +1313,11 @@ void cmVisualStudio10TargetGenerator::WriteXamlFilesGroup(Elem& e0)
       } else {
         xamlType = "Page";
       }
+      const char* toolOverride = oi->GetProperty("VS_TOOL_OVERRIDE");
+      if (toolOverride && *toolOverride) {
+        xamlType = toolOverride;
+      }
+
 
       Elem e2(e1, xamlType);
       this->WriteSource(e2, oi);
@@ -1573,19 +1604,15 @@ void cmVisualStudio10TargetGenerator::WriteNsightTegraConfigurationValues(
 
 void cmVisualStudio10TargetGenerator::ComputeCustomCommands()
 {
-  if (this->ProjectType == csstandard) {
+  if (this->ProjectType == csstandard || this->ProjectType == csproj) {
     this->CSharpCustomCommandNames.clear();
     std::vector<cmSourceFile const*> customCommands;
     this->GeneratorTarget->GetCustomCommands(customCommands, "");
     for (cmSourceFile const* si : customCommands) {
-
         std::string sourcePath = si->GetFullPath();
-
-        for (std::string& c : this->Configurations)
-        {
+        for (std::string& c : this->Configurations) {
           std::string name = "CustomCommand_" + c + "_" +
             cmSystemTools::ComputeStringMD5(sourcePath);
-
           this->CSharpCustomCommandNames.insert(name);
         }
     }
