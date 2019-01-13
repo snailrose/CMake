@@ -1736,6 +1736,8 @@ void cmVisualStudio10TargetGenerator::WriteCustomRule(
     if (!link.empty()) {
       e2.Element("Link", link);
     }
+    else
+        e2.Element("Visible", "false");
   }
   for (std::string const& c : this->Configurations) {
     cmCustomCommandGenerator ccg(command, c, lg);
@@ -1767,12 +1769,7 @@ void cmVisualStudio10TargetGenerator::WriteCustomRule(
         cmSystemTools::ComputeStringMD5(sourcePath);
       this->WriteCustomRuleCSharp(e0, c, name, script, inputs.str(),
                                   outputs.str(), comment);
-    } /*else if (this->ProjectType == csstandard) {
-      std::string name = "CustomCommand_" + c + "_" +
-        cmSystemTools::ComputeStringMD5(sourcePath);
-      this->WriteCustomRuleCSharpSTD(e0, c, name, script, inputs.str(),
-                                     outputs.str(), comment);
-    }  */
+    }
     else {
       this->WriteCustomRuleCpp(*spe2, c, script, inputs.str(), outputs.str(),
                                comment);
@@ -1812,19 +1809,6 @@ void cmVisualStudio10TargetGenerator::WriteCustomRuleCSharp(
   if (!comment.empty()) {
     Elem(e1, "Exec").Attribute("Command", "echo " + comment);
   }
-  Elem(e1, "Exec").Attribute("Command", script);
-}
-
-void cmVisualStudio10TargetGenerator::WriteCustomRuleCSharpSTD(
-  Elem& e0, std::string const& config, std::string const& name,
-  std::string const& script, std::string const& inputs,
-  std::string const& outputs, std::string const& comment)
-{
-  this->CSharpCustomCommandNames.insert(name);
-  Elem e1(e0, "Target");
-  e1.Attribute("Name", name);
-  e1.Attribute("Inputs", cmVS10EscapeAttr(inputs));
-  e1.Attribute("Outputs", cmVS10EscapeAttr(outputs));
   Elem(e1, "Exec").Attribute("Command", script);
 }
 

@@ -146,12 +146,6 @@ private:
                              std::string const& comment);
 
   void ComputeCustomCommands();
-  void WriteCustomRuleCSharpSTD(Elem& e0, std::string const& config,
-                             std::string const& commandName,
-                             std::string const& script,
-                             std::string const& inputs,
-                             std::string const& outputs,
-                             std::string const& comment);
   void WriteCustomCommands(Elem& e0);
   void WriteCustomCommand(Elem& e0, cmSourceFile const* sf);
   void WriteGroups();
