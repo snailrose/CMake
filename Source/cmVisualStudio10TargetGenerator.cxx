@@ -355,17 +355,7 @@ void cmVisualStudio10TargetGenerator::GenerateCSStandard()
 
     this->ComputeCustomCommands();
     if (!this->CSharpCustomCommandNames.empty()) {
-      std::string ini = "";
-      size_t size = this->CSharpCustomCommandNames.size(), i = 0;
-
-      for (std::string name : this->CSharpCustomCommandNames) {
-        ini += name;
-
-        if (i + 1 < size)
-          ini += ";";
-        ++i;
-      }
-      e0.Attribute("InitialTargets", ini);
+      e0.Attribute("DefaultTargets", "Build");
     }
 
     const char* dotNet =
@@ -392,7 +382,6 @@ void cmVisualStudio10TargetGenerator::GenerateCSStandard()
 
     {
       Elem e1(e0, "ItemGroup");
-
       std::vector<std::pair<std::string, std::pair<std::string, std::string>>>
         filters;
       filters.push_back(
@@ -475,19 +464,6 @@ void cmVisualStudio10TargetGenerator::GenerateCSXamarinUWP()
     Elem e0(BuildFileStream, "Project");
     e0.Attribute("DefaultTargets", "Build");
     this->ComputeCustomCommands();
-    if (!this->CSharpCustomCommandNames.empty()) {
-      std::string ini = "";
-      size_t size = this->CSharpCustomCommandNames.size(), i = 0;
-
-      for (std::string name : this->CSharpCustomCommandNames) {
-        ini += name;
-
-        if (i + 1 < size)
-          ini += ";";
-        ++i;
-      }
-      e0.Attribute("InitialTargets", ini);
-    }
 
     e0.Attribute("ToolsVersion", this->GlobalGenerator->GetToolsVersion());
     e0.Attribute("xmlns","http://schemas.microsoft.com/developer/msbuild/2003");
@@ -524,6 +500,7 @@ void cmVisualStudio10TargetGenerator::GenerateCSXamarinUWP()
 
       e1.Element("EnableDotNetNativeCompatibleProfile", "true");
       e1.Element("FileAlignment", "512");
+
       e1.Element("ProjectTypeGuids",
                  "{A5A43C5B-DE2A-4C0C-9213-0A381AF9435A};{FAE04EC0-301F-11D3-"
                  "BF4B-00C04F79EFBC}");
@@ -539,7 +516,6 @@ void cmVisualStudio10TargetGenerator::GenerateCSXamarinUWP()
         Options& o = *(this->ClOptions[c]);
 
         std::string constants = "TRACE;NETFX_CORE;WINDOWS_UWP";
-
         if (o.IsDebug()) {
           e1.Element("DebugSymbols", "true");
           e1.Element("DebugType", "full");
@@ -554,7 +530,6 @@ void cmVisualStudio10TargetGenerator::GenerateCSXamarinUWP()
         std::string outDir = this->GeneratorTarget->GetDirectory(c) + "/";
         ConvertToWindowsSlash(outDir);
         e1.Element("OutputPath", outDir);
-
         e1.Element("DefineConstants", constants);
         e1.Element("NoWarn", ";2008");
         e1.Element("PlatformTarget", "x86");
@@ -607,10 +582,322 @@ void cmVisualStudio10TargetGenerator::GenerateCSXamarinUWP()
 
 void cmVisualStudio10TargetGenerator::GenerateCSXamariniOS()
 {
+    const std::string ProjectFileExtension =
+      computeProjectFileExtension(this->GeneratorTarget);
+
+    std::string path = this->LocalGenerator->GetCurrentBinaryDirectory();
+    path += "/";
+    path += this->Name;
+    path += ProjectFileExtension;
+    cmGeneratedFileStream BuildFileStream(path);
+    const std::string PathToProjectFile = path;
+    BuildFileStream.SetCopyIfDifferent(true);
+
+    this->GeneratorTarget->Target->SetProperty("GENERATOR_FILE_NAME",
+                                               this->Name.c_str());
+    this->GeneratorTarget->Target->SetProperty("GENERATOR_FILE_NAME_EXT",
+                                               ProjectFileExtension.c_str());
+    this->DotNetHintReferences.clear();
+    this->AdditionalUsingDirectories.clear();
+    if (this->GeneratorTarget->GetType() <= cmStateEnums::OBJECT_LIBRARY) {
+      if (!this->ComputeClOptions()) {
+        return;
+      }
+      if (!this->ComputeRcOptions()) {
+        return;
+      }
+      if (!this->ComputeLinkOptions()) {
+        return;
+      }
+      if (!this->ComputeLibOptions()) {
+        return;
+      }
+    }
+
+    {
+      Elem e0(BuildFileStream, "Project");
+      e0.Attribute("DefaultTargets", "Build");
+      this->ComputeCustomCommands();
+      if (!this->CSharpCustomCommandNames.empty()) {
+        std::string ini = "";
+        size_t size = this->CSharpCustomCommandNames.size(), i = 0;
+
+        for (std::string name : this->CSharpCustomCommandNames) {
+          ini += name;
+
+          if (i + 1 < size)
+            ini += ";";
+          ++i;
+        }
+        e0.Attribute("InitialTargets", ini);
+      }
+
+      e0.Attribute("ToolsVersion", this->GlobalGenerator->GetToolsVersion());
+      e0.Attribute("xmlns",
+                   "http://schemas.microsoft.com/developer/msbuild/2003");
+
+      {
+        Elem e1(e0, "Import");
+        e1.Attribute("Project", VS10_CSharp_DEFAULT_PROPS);
+      }
+
+      {
+        Elem e1(e0, "PropertyGroup");
+        e1.Attribute("Label", "Globals");
+        e1.Element("ProjectGuid", "{" + this->GUID + "}");
+
+        if (this->GeneratorTarget->GetType() == cmStateEnums::EXECUTABLE)
+          e1.Element("OutputType", "AppContainerExe");
+        else
+          e1.Element("OutputType", "Library");
+
+        e1.Element("AppDesignerFolder", "Properties");
+        e1.Element("DefaultLanguage", "en-US");
+
+        std::vector<std::string> keys =
+          this->GeneratorTarget->GetPropertyKeys();
+        for (std::string const& keyIt : keys) {
+          static const char* prefix = "VS_GLOBAL_";
+          if (keyIt.find(prefix) != 0)
+            continue;
+          std::string globalKey = keyIt.substr(strlen(prefix));
+          const char* value = this->GeneratorTarget->GetProperty(keyIt);
+          if (!value)
+            continue;
+          e1.Element(globalKey.c_str(), value);
+        }
+
+        e1.Element("EnableDotNetNativeCompatibleProfile", "true");
+        e1.Element("FileAlignment", "512");
+        e1.Element(
+          "ProjectTypeGuids",
+          "{A5A43C5B-DE2A-4C0C-9213-0A381AF9435A};{FAE04EC0-301F-11D3-"
+          "BF4B-00C04F79EFBC}");
+        e1.Element("AppxBundlePlatforms", "x86");
+      }
+
+      for (std::string const& c : this->Configurations) {
+        Elem e1(e0, "PropertyGroup");
+        e1.Attribute("Condition", this->CalcCondition(c));
+        e1.Attribute("Label", "Configuration");
+
+        if (this->MSTools) {
+          Options& o = *(this->ClOptions[c]);
+
+          std::string constants = "TRACE;NETFX_CORE;WINDOWS_UWP";
+
+          if (o.IsDebug()) {
+            e1.Element("DebugSymbols", "true");
+            e1.Element("DebugType", "full");
+
+            constants = "DEBUG;" + constants;
+          } else {
+            e1.Element("Optimize", "true");
+            e1.Element("DebugType", "pdbonly");
+            e1.Element("UseDotNetNativeToolchain", "false");
+          }
+
+          std::string outDir = this->GeneratorTarget->GetDirectory(c) + "/";
+          ConvertToWindowsSlash(outDir);
+          e1.Element("OutputPath", outDir);
+
+          e1.Element("DefineConstants", constants);
+          e1.Element("NoWarn", ";2008");
+          e1.Element("PlatformTarget", "x86");
+          e1.Element("UseVSHostingProcess", "false");
+          e1.Element("ErrorReport", "prompt");
+          e1.Element("Prefer32Bit", "true");
+        }
+      }
+
+      this->WriteAllSources(e0);
+      this->WriteCustomCommands(e0);
+      this->WriteDotNetPackages(e0);
+      this->WriteDotNetReferences(e0);
+      this->WriteXamlFilesGroup(e0);
+      this->WriteProjectReferences(e0);
+      // make sure custom commands are executed before build (if necessary)
+
+      for (std::string const& c : this->Configurations) {
+        Elem e1(e0, "PropertyGroup");
+        e1.Attribute("Condition", "'$(Configuration)' == '" + c + "'");
+        e1.SetHasElements();
+        this->WriteEvents(e1, c);
+      }
+
+      {
+        Elem e1(e0, "PropertyGroup");
+        std::ostringstream oss;
+        oss << "\n";
+        for (std::string const& i : this->CSharpCustomCommandNames) {
+          oss << "      " << i << ";\n";
+        }
+        oss << "      "
+            << "$(BuildDependsOn)\n";
+        e1.Element("BuildDependsOn", oss.str());
+      }
+
+      {
+        Elem e1(e0, "Import");
+        e1.Attribute("Project", VS10_UWP_CSharp_TARGETS);
+      }
+    }
+
+    if (BuildFileStream.Close()) {
+      this->GlobalGenerator->FileReplacedDuringGenerate(PathToProjectFile);
+    }
+
+    // The groups are stored in a separate file for VS 10
+    this->WriteGroups();
 }
+
+#define VS10_ANDROID_CSharp_TARGETS "$(MSBuildExtensionsPath)\\Xamarin\\Android\\Xamarin.Android.CSharp.targets"
 
 void cmVisualStudio10TargetGenerator::GenerateCSXamarinAndroid()
 {
+    const std::string ProjectFileExtension =
+      computeProjectFileExtension(this->GeneratorTarget);
+
+    std::string path = this->LocalGenerator->GetCurrentBinaryDirectory();
+    path += "/";
+    path += this->Name;
+    path += ProjectFileExtension;
+    cmGeneratedFileStream BuildFileStream(path);
+    const std::string PathToProjectFile = path;
+    BuildFileStream.SetCopyIfDifferent(true);
+
+    this->GeneratorTarget->Target->SetProperty("GENERATOR_FILE_NAME",
+                                               this->Name.c_str());
+    this->GeneratorTarget->Target->SetProperty("GENERATOR_FILE_NAME_EXT",
+                                               ProjectFileExtension.c_str());
+    this->DotNetHintReferences.clear();
+    this->AdditionalUsingDirectories.clear();
+    if (this->GeneratorTarget->GetType() <= cmStateEnums::OBJECT_LIBRARY) {
+      if (!this->ComputeClOptions()) {
+        return;
+      }
+      if (!this->ComputeRcOptions()) {
+        return;
+      }
+      if (!this->ComputeLinkOptions()) {
+        return;
+      }
+      if (!this->ComputeLibOptions()) {
+        return;
+      }
+    }
+
+    {
+      Elem e0(BuildFileStream, "Project");
+      e0.Attribute("DefaultTargets", "Build");
+      this->ComputeCustomCommands();
+      if (!this->CSharpCustomCommandNames.empty()) {
+        std::string ini = "";
+        size_t size = this->CSharpCustomCommandNames.size(), i = 0;
+
+        for (std::string name : this->CSharpCustomCommandNames) {
+          ini += name;
+
+          if (i + 1 < size)
+            ini += ";";
+          ++i;
+        }
+       /// e0.Attribute("InitialTargets", ini);
+      }
+
+      e0.Attribute("ToolsVersion", this->GlobalGenerator->GetToolsVersion());
+      e0.Attribute("xmlns",
+                   "http://schemas.microsoft.com/developer/msbuild/2003");
+
+      {
+        Elem e1(e0, "Import");
+        e1.Attribute("Project", VS10_CSharp_DEFAULT_PROPS);
+      }
+
+      {
+        Elem e1(e0, "PropertyGroup");
+        e1.Attribute("Label", "Globals");
+        e1.Element("ProjectGuid", "{" + this->GUID + "}");
+
+        std::vector<std::string> keys =
+          this->GeneratorTarget->GetPropertyKeys();
+        for (std::string const& keyIt : keys) {
+          static const char* prefix = "VS_GLOBAL_";
+          if (keyIt.find(prefix) != 0)
+            continue;
+          std::string globalKey = keyIt.substr(strlen(prefix));
+          const char* value = this->GeneratorTarget->GetProperty(keyIt);
+          if (!value)
+            continue;
+          e1.Element(globalKey.c_str(), value);
+        }
+      }
+
+      for (std::string const& c : this->Configurations) {
+        Elem e1(e0, "PropertyGroup");
+        e1.Attribute("Condition", this->CalcCondition(c));
+        e1.Attribute("Label", "Configuration");
+
+        if (this->MSTools) {
+          Options& o = *(this->ClOptions[c]);
+
+          std::string constants = "";
+          if (o.IsDebug()) {
+            e1.Element("DebugSymbols", "true");
+            e1.Element("DebugType", "full");
+
+            constants = "DEBUG;" + constants;
+          } else {
+            e1.Element("Optimize", "true");
+            e1.Element("DebugType", "pdbonly");
+            e1.Element("UseDotNetNativeToolchain", "false");
+          }
+
+          std::string outDir = this->GeneratorTarget->GetDirectory(c) + "/";
+          ConvertToWindowsSlash(outDir);
+          e1.Element("OutputPath", outDir);
+        }
+      }
+
+      this->WriteAllSources(e0);
+      this->WriteCustomCommands(e0);
+      this->WriteDotNetPackages(e0);
+      this->WriteDotNetReferences(e0);
+      this->WriteXamlFilesGroup(e0);
+      this->WriteProjectReferences(e0);
+      // make sure custom commands are executed before build (if necessary)
+
+      for (std::string const& c : this->Configurations) {
+        Elem e1(e0, "PropertyGroup");
+        e1.Attribute("Condition", "'$(Configuration)' == '" + c + "'");
+        e1.SetHasElements();
+        this->WriteEvents(e1, c);
+      }
+
+      {
+        Elem e1(e0, "PropertyGroup");
+        std::ostringstream oss;
+        oss << "\n";
+        for (std::string const& i : this->CSharpCustomCommandNames) {
+          oss << "      " << i << ";\n";
+        }
+        oss << "      "
+            << "$(BuildDependsOn)\n";
+        e1.Element("BuildDependsOn", oss.str());
+      }
+
+      {
+        Elem e1(e0, "Import");
+        e1.Attribute("Project", VS10_ANDROID_CSharp_TARGETS);
+      }
+    }
+
+    if (BuildFileStream.Close()) {
+      this->GlobalGenerator->FileReplacedDuringGenerate(PathToProjectFile);
+    }
+
+    // The groups are stored in a separate file for VS 10
+    this->WriteGroups();
 }
 
 void cmVisualStudio10TargetGenerator::Generate()
@@ -651,11 +938,19 @@ void cmVisualStudio10TargetGenerator::Generate()
       return;
     }
   }
-  const char* xamarinTarget =
+  const std::string xamarinTarget =
     this->GeneratorTarget->Target->GetSafeProperty("VS_XAMARIN_TARGET");
 
-  if (std::string(xamarinTarget) == "UWP") {
+  if (xamarinTarget == "UWP") {
     GenerateCSXamarinUWP();
+    return;
+  }
+  else if (xamarinTarget == "Android") {
+    GenerateCSXamarinAndroid();
+    return;
+  }
+  else if (xamarinTarget == "iOS") {
+    GenerateCSXamariniOS();
     return;
   }
 
@@ -1806,6 +2101,7 @@ void cmVisualStudio10TargetGenerator::WriteCustomRuleCSharp(
   e1.S << "\n    Name=\"" << name << "\"";
   e1.S << "\n    Inputs=\"" << cmVS10EscapeAttr(inputs) << "\"";
   e1.S << "\n    Outputs=\"" << cmVS10EscapeAttr(outputs) << "\"";
+  e1.S << "\n    BeforeTargets=\"Build\"";
   if (!comment.empty()) {
     Elem(e1, "Exec").Attribute("Command", "echo " + comment);
   }
