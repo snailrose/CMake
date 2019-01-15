@@ -545,8 +545,8 @@ void cmVisualStudio10TargetGenerator::GenerateCSXamarinUWP()
     this->WriteDotNetReferences(e0);
     this->WriteXamlFilesGroup(e0);
     this->WriteProjectReferences(e0);
-    // make sure custom commands are executed before build (if necessary)
 
+    // make sure custom commands are executed before build (if necessary)
     for (std::string const& c : this->Configurations) {
       Elem e1(e0, "PropertyGroup");
       e1.Attribute("Condition", "'$(Configuration)' == '" + c + "'");
@@ -865,8 +865,8 @@ void cmVisualStudio10TargetGenerator::GenerateCSXamarinAndroid()
       this->WriteDotNetReferences(e0);
       this->WriteXamlFilesGroup(e0);
       this->WriteProjectReferences(e0);
-      // make sure custom commands are executed before build (if necessary)
 
+      // make sure custom commands are executed before build (if necessary)
       for (std::string const& c : this->Configurations) {
         Elem e1(e0, "PropertyGroup");
         e1.Attribute("Condition", "'$(Configuration)' == '" + c + "'");
@@ -5328,7 +5328,7 @@ bool cmVisualStudio10TargetGenerator::ForceOld(const std::string& source) const
 void cmVisualStudio10TargetGenerator::GetCSharpSourceProperties(
   cmSourceFile const* sf, std::map<std::string, std::string>& tags)
 {
-  if (this->ProjectType == csproj) {
+  if (this->ProjectType == csproj || this->ProjectType == csstandard) {
     const cmPropertyMap& props = sf->GetProperties();
     for (auto const& p : props) {
       static const std::string propNamePrefix = "VS_CSHARP_";
