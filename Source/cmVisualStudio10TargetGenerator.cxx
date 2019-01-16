@@ -351,7 +351,13 @@ void cmVisualStudio10TargetGenerator::GenerateCSStandard()
 
   {
     Elem e0(BuildFileStream, "Project");
-    e0.Attribute("Sdk", "Microsoft.NET.Sdk");
+    const char* sdkType =
+      this->GeneratorTarget->Target->GetProperty("VS_SDK");
+
+    if (sdkType)
+      e0.Attribute("Sdk", sdkType);
+    else
+      e0.Attribute("Sdk", "Microsoft.NET.Sdk");
 
     this->ComputeCustomCommands();
     if (!this->CSharpCustomCommandNames.empty()) {
