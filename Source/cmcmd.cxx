@@ -9,6 +9,7 @@
 #include "cmMakefile.h"
 #include "cmQtAutoGeneratorMocUic.h"
 #include "cmQtAutoGeneratorRcc.h"
+#include "cmState.h"
 #include "cmStateDirectory.h"
 #include "cmStateSnapshot.h"
 #include "cmSystemTools.h"
@@ -44,6 +45,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <utility>
 
 class cmConnection;
 
@@ -270,9 +272,12 @@ static int HandleCppLint(const std::string& runCmd,
               << "\n";
     return 1;
   }
-  std::cerr << "Warning: cpplint diagnostics:\n";
-  // Output the output from cpplint to stderr
-  std::cerr << stdOut;
+  if (!stdOut.empty()) {
+    std::cerr << "Warning: cpplint diagnostics:\n";
+    // Output the output from cpplint to stderr
+    std::cerr << stdOut;
+  }
+
   // always return 0 so the build can continue as cpplint returns non-zero
   // for any warning
   return 0;
@@ -717,7 +722,7 @@ int cmcmd::ExecuteCMakeCommand(std::vector<std::string>& args)
         std::cerr << "-E capabilities accepts no additional arguments\n";
         return 1;
       }
-      cmake cm(cmake::RoleInternal);
+      cmake cm(cmake::RoleInternal, cmState::Unknown);
 #if defined(CMAKE_BUILD_WITH_CMAKE)
       std::cout << cm.ReportCapabilities(true);
 #else
@@ -894,7 +899,8 @@ int cmcmd::ExecuteCMakeCommand(std::vector<std::string>& args)
       const bool verbose = isCMakeVerbose();
 
       // Create a cmake object instance to process dependencies.
-      cmake cm(cmake::RoleScript); // All we need is the `set` command.
+      // All we need is the `set` command.
+      cmake cm(cmake::RoleScript, cmState::Unknown);
       std::string gen;
       std::string homeDir;
       std::string startDir;
@@ -1017,7 +1023,7 @@ int cmcmd::ExecuteCMakeCommand(std::vector<std::string>& args)
       std::string config;
       if (args.size() > 3) {
         config = args[3];
-      };
+      }
       return autoGen.Run(infoFile, config) ? 0 : 1;
     }
 #endif
@@ -1481,7 +1487,7 @@ int cmcmd::ExecuteLinkScript(std::vector<std::string>& args)
         break;
       default:
         break;
-    };
+    }
   }
 
   // Free the process instance.

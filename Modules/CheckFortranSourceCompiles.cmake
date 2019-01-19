@@ -26,7 +26,8 @@ Check if given Fortran source compiles and links into an executable.
   if anything in the output matches any of the specified regular expressions.
 
   By default, the test source file will be given a ``.F`` file extension. The
-  ``SRC_EXT`` option can be used to override this with ``.<extension>`` instead.
+  ``SRC_EXT`` option can be used to override this with ``.<extension>`` instead--
+  ``.F90`` is a typical choice.
 
   The underlying check is performed by the :command:`try_compile` command. The
   compile and link commands can be influenced by setting any of the following

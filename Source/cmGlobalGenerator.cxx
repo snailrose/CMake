@@ -32,6 +32,7 @@
 #include "cmLocalGenerator.h"
 #include "cmMSVC60LinkLineComputer.h"
 #include "cmMakefile.h"
+#include "cmMessageType.h"
 #include "cmOutputConverter.h"
 #include "cmPolicies.h"
 #include "cmSourceFile.h"
@@ -137,7 +138,7 @@ bool cmGlobalGenerator::SetGeneratorInstance(std::string const& i,
     "  " << i << "\n"
     "was specified.";
   /* clang-format on */
-  mf->IssueMessage(cmake::FATAL_ERROR, e.str());
+  mf->IssueMessage(MessageType::FATAL_ERROR, e.str());
   return false;
 }
 
@@ -157,7 +158,7 @@ bool cmGlobalGenerator::SetGeneratorPlatform(std::string const& p,
     "  " << p << "\n"
     "was specified.";
   /* clang-format on */
-  mf->IssueMessage(cmake::FATAL_ERROR, e.str());
+  mf->IssueMessage(MessageType::FATAL_ERROR, e.str());
   return false;
 }
 
@@ -176,7 +177,7 @@ bool cmGlobalGenerator::SetGeneratorToolset(std::string const& ts,
     "  " << ts << "\n"
     "was specified.";
   /* clang-format on */
-  mf->IssueMessage(cmake::FATAL_ERROR, e.str());
+  mf->IssueMessage(MessageType::FATAL_ERROR, e.str());
   return false;
 }
 
@@ -301,7 +302,8 @@ bool cmGlobalGenerator::CheckTargetsForMissingSources() const
     for (cmGeneratorTarget* target : targets) {
       if (target->GetType() == cmStateEnums::TargetType::GLOBAL_TARGET ||
           target->GetType() == cmStateEnums::TargetType::INTERFACE_LIBRARY ||
-          target->GetType() == cmStateEnums::TargetType::UTILITY) {
+          target->GetType() == cmStateEnums::TargetType::UTILITY ||
+          cmSystemTools::IsOn(target->GetProperty("ghs_integrity_app"))) {
         continue;
       }
 
@@ -319,8 +321,8 @@ bool cmGlobalGenerator::CheckTargetsForMissingSources() const
       if (srcs.empty()) {
         std::ostringstream e;
         e << "No SOURCES given to target: " << target->GetName();
-        this->GetCMakeInstance()->IssueMessage(cmake::FATAL_ERROR, e.str(),
-                                               target->GetBacktrace());
+        this->GetCMakeInstance()->IssueMessage(
+          MessageType::FATAL_ERROR, e.str(), target->GetBacktrace());
         failed = true;
       }
     }
@@ -454,7 +456,7 @@ void cmGlobalGenerator::EnableLanguage(
       e << "Language '" << li
         << "' is currently being enabled.  "
            "Recursive call not allowed.";
-      mf->IssueMessage(cmake::FATAL_ERROR, e.str());
+      mf->IssueMessage(MessageType::FATAL_ERROR, e.str());
       cmSystemTools::SetFatalErrorOccured();
       return;
     }
@@ -471,7 +473,7 @@ void cmGlobalGenerator::EnableLanguage(
           std::ostringstream e;
           e << "The test project needs language " << lang
             << " which is not enabled.";
-          this->TryCompileOuterMakefile->IssueMessage(cmake::FATAL_ERROR,
+          this->TryCompileOuterMakefile->IssueMessage(MessageType::FATAL_ERROR,
                                                       e.str());
           cmSystemTools::SetFatalErrorOccured();
           return;
@@ -775,7 +777,7 @@ void cmGlobalGenerator::EnableLanguage(
         if (!this->CMakeInstance->GetIsInTryCompile()) {
           this->PrintCompilerAdvice(noCompiler, lang,
                                     mf->GetDefinition(compilerEnv));
-          mf->IssueMessage(cmake::FATAL_ERROR, noCompiler.str());
+          mf->IssueMessage(MessageType::FATAL_ERROR, noCompiler.str());
           fatalError = true;
         }
       }
@@ -903,7 +905,7 @@ void cmGlobalGenerator::CheckCompilerIdCompatibility(
             " compiler id \"AppleClang\" to \"Clang\" for compatibility."
             ;
           /* clang-format on */
-          mf->IssueMessage(cmake::AUTHOR_WARNING, w.str());
+          mf->IssueMessage(MessageType::AUTHOR_WARNING, w.str());
         }
         CM_FALLTHROUGH;
       case cmPolicies::OLD:
@@ -913,7 +915,7 @@ void cmGlobalGenerator::CheckCompilerIdCompatibility(
       case cmPolicies::REQUIRED_IF_USED:
       case cmPolicies::REQUIRED_ALWAYS:
         mf->IssueMessage(
-          cmake::FATAL_ERROR,
+          MessageType::FATAL_ERROR,
           cmPolicies::GetRequiredPolicyError(cmPolicies::CMP0025));
       case cmPolicies::NEW:
         // NEW behavior is to keep AppleClang.
@@ -933,7 +935,7 @@ void cmGlobalGenerator::CheckCompilerIdCompatibility(
             " compiler id \"QCC\" to \"GNU\" for compatibility."
             ;
           /* clang-format on */
-          mf->IssueMessage(cmake::AUTHOR_WARNING, w.str());
+          mf->IssueMessage(MessageType::AUTHOR_WARNING, w.str());
         }
         CM_FALLTHROUGH;
       case cmPolicies::OLD:
@@ -948,7 +950,7 @@ void cmGlobalGenerator::CheckCompilerIdCompatibility(
       case cmPolicies::REQUIRED_IF_USED:
       case cmPolicies::REQUIRED_ALWAYS:
         mf->IssueMessage(
-          cmake::FATAL_ERROR,
+          MessageType::FATAL_ERROR,
           cmPolicies::GetRequiredPolicyError(cmPolicies::CMP0047));
         CM_FALLTHROUGH;
       case cmPolicies::NEW:
@@ -1410,13 +1412,13 @@ void cmGlobalGenerator::Generate()
 
   if (!this->GenerateCPackPropertiesFile()) {
     this->GetCMakeInstance()->IssueMessage(
-      cmake::FATAL_ERROR, "Could not write CPack properties file.");
+      MessageType::FATAL_ERROR, "Could not write CPack properties file.");
   }
 
   for (auto& buildExpSet : this->BuildExportSets) {
     if (!buildExpSet.second->GenerateImportFile()) {
       if (!cmSystemTools::GetErrorOccuredFlag()) {
-        this->GetCMakeInstance()->IssueMessage(cmake::FATAL_ERROR,
+        this->GetCMakeInstance()->IssueMessage(MessageType::FATAL_ERROR,
                                                "Could not write export file.");
       }
       return;
@@ -1439,7 +1441,8 @@ void cmGlobalGenerator::Generate()
     for (std::string const& t : this->CMP0042WarnTargets) {
       w << " " << t << "\n";
     }
-    this->GetCMakeInstance()->IssueMessage(cmake::AUTHOR_WARNING, w.str());
+    this->GetCMakeInstance()->IssueMessage(MessageType::AUTHOR_WARNING,
+                                           w.str());
   }
 
   if (!this->CMP0068WarnTargets.empty()) {
@@ -1455,7 +1458,8 @@ void cmGlobalGenerator::Generate()
     for (std::string const& t : this->CMP0068WarnTargets) {
       w << " " << t << "\n";
     }
-    this->GetCMakeInstance()->IssueMessage(cmake::AUTHOR_WARNING, w.str());
+    this->GetCMakeInstance()->IssueMessage(MessageType::AUTHOR_WARNING,
+                                           w.str());
   }
 
   this->CMakeInstance->UpdateProgress("Generating done", -1);
@@ -2233,7 +2237,7 @@ bool cmGlobalGenerator::CheckCMP0037(std::string const& targetName,
   if (!tgt) {
     return true;
   }
-  cmake::MessageType messageType = cmake::AUTHOR_WARNING;
+  MessageType messageType = MessageType::AUTHOR_WARNING;
   std::ostringstream e;
   bool issueMessage = false;
   switch (tgt->GetPolicyStatusCMP0037()) {
@@ -2247,18 +2251,18 @@ bool cmGlobalGenerator::CheckCMP0037(std::string const& targetName,
     case cmPolicies::REQUIRED_IF_USED:
     case cmPolicies::REQUIRED_ALWAYS:
       issueMessage = true;
-      messageType = cmake::FATAL_ERROR;
+      messageType = MessageType::FATAL_ERROR;
       break;
   }
   if (issueMessage) {
     e << "The target name \"" << targetName << "\" is reserved " << reason
       << ".";
-    if (messageType == cmake::AUTHOR_WARNING) {
+    if (messageType == MessageType::AUTHOR_WARNING) {
       e << "  It may result in undefined behavior.";
     }
     this->GetCMakeInstance()->IssueMessage(messageType, e.str(),
                                            tgt->GetBacktrace());
-    if (messageType == cmake::FATAL_ERROR) {
+    if (messageType == MessageType::FATAL_ERROR) {
       return false;
     }
   }
@@ -2453,7 +2457,7 @@ void cmGlobalGenerator::AddGlobalTarget_Install(
   bool skipInstallRules = mf->IsOn("CMAKE_SKIP_INSTALL_RULES");
   if (this->InstallTargetEnabled && skipInstallRules) {
     this->CMakeInstance->IssueMessage(
-      cmake::WARNING,
+      MessageType::WARNING,
       "CMAKE_SKIP_INSTALL_RULES was enabled even though "
       "installation rules have been specified",
       mf->GetBacktrace());

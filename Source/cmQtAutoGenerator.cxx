@@ -8,12 +8,14 @@
 #include "cmAlgorithms.h"
 #include "cmGlobalGenerator.h"
 #include "cmMakefile.h"
+#include "cmState.h"
 #include "cmStateDirectory.h"
 #include "cmStateSnapshot.h"
 #include "cmSystemTools.h"
 #include "cmake.h"
 
 #include <algorithm>
+#include <utility>
 
 // -- Class methods
 
@@ -685,7 +687,7 @@ bool cmQtAutoGenerator::Run(std::string const& infoFile,
 
   bool success = false;
   {
-    cmake cm(cmake::RoleScript);
+    cmake cm(cmake::RoleScript, cmState::Unknown);
     cm.SetHomeOutputDirectory(InfoDir());
     cm.SetHomeDirectory(InfoDir());
     cm.GetCurrentSnapshot().SetDefaultDefinitions();

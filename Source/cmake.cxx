@@ -55,8 +55,8 @@
 #    include "cmGlobalVisualStudio11Generator.h"
 #    include "cmGlobalVisualStudio12Generator.h"
 #    include "cmGlobalVisualStudio14Generator.h"
-#    include "cmGlobalVisualStudio15Generator.h"
 #    include "cmGlobalVisualStudio9Generator.h"
+#    include "cmGlobalVisualStudioVersionedGenerator.h"
 #    include "cmVSSetupHelper.h"
 
 #    define CMAKE_HAVE_VS_GENERATORS
@@ -126,7 +126,7 @@ void cmWarnUnusedCliWarning(const std::string& variable, int /*unused*/,
   cm->MarkCliAsUsed(variable);
 }
 
-cmake::cmake(Role role)
+cmake::cmake(Role role, cmState::Mode mode)
 {
   this->Trace = false;
   this->TraceExpand = false;
@@ -140,6 +140,7 @@ cmake::cmake(Role role)
   this->FileComparison = new cmFileTimeComparison;
 
   this->State = new cmState;
+  this->State->SetMode(mode);
   this->CurrentSnapshot = this->State->CreateBaseSnapshot();
   this->Messenger = new cmMessenger;
 
@@ -610,16 +611,13 @@ bool cmake::FindPackage(const std::vector<std::string>& args)
 }
 
 // Parse the args
-void cmake::SetArgs(const std::vector<std::string>& args,
-                    bool directoriesSetBefore)
+void cmake::SetArgs(const std::vector<std::string>& args)
 {
-  bool directoriesSet = directoriesSetBefore;
   bool haveToolset = false;
   bool havePlatform = false;
   for (unsigned int i = 1; i < args.size(); ++i) {
     std::string const& arg = args[i];
     if (arg.find("-H", 0) == 0 || arg.find("-S", 0) == 0) {
-      directoriesSet = true;
       std::string path = arg.substr(2);
       if (path.empty()) {
         ++i;
@@ -640,7 +638,6 @@ void cmake::SetArgs(const std::vector<std::string>& args,
     } else if (arg.find("-O", 0) == 0) {
       // There is no local generate anymore.  Ignore -O option.
     } else if (arg.find("-B", 0) == 0) {
-      directoriesSet = true;
       std::string path = arg.substr(2);
       if (path.empty()) {
         ++i;
@@ -802,15 +799,26 @@ void cmake::SetArgs(const std::vector<std::string>& args,
         this->SetGlobalGenerator(gen);
       }
     }
-    // no option assume it is the path to the source
+    // no option assume it is the path to the source or an existing build
     else {
-      directoriesSet = true;
       this->SetDirectoriesFromFile(arg.c_str());
     }
   }
-  if (!directoriesSet) {
-    this->SetHomeOutputDirectory(cmSystemTools::GetCurrentWorkingDirectory());
+
+  const bool haveSourceDir = !this->GetHomeDirectory().empty();
+  const bool haveBinaryDir = !this->GetHomeOutputDirectory().empty();
+
+  if (this->CurrentWorkingMode == cmake::NORMAL_MODE && !haveSourceDir &&
+      !haveBinaryDir) {
+    cmSystemTools::Error("No source or binary directory provided");
+    return;
+  }
+
+  if (!haveSourceDir) {
     this->SetHomeDirectory(cmSystemTools::GetCurrentWorkingDirectory());
+  }
+  if (!haveBinaryDir) {
+    this->SetHomeOutputDirectory(cmSystemTools::GetCurrentWorkingDirectory());
   }
 }
 
@@ -1538,8 +1546,9 @@ void cmake::CreateDefaultGlobalGenerator()
     "\\Setup\\VC;ProductDir", //
     ";InstallDir"             //
   };
-  cmVSSetupAPIHelper vsSetupAPIHelper;
-  if (vsSetupAPIHelper.IsVS2017Installed()) {
+  if (cmVSSetupAPIHelper(16).IsVSInstalled()) {
+    found = "Visual Studio 16 2019";
+  } else if (cmVSSetupAPIHelper(15).IsVSInstalled()) {
     found = "Visual Studio 15 2017";
   } else {
     for (VSVersionedGenerator const* g = cm::cbegin(vsGenerators);
@@ -1793,7 +1802,10 @@ void cmake::AddDefaultGenerators()
 {
 #if defined(_WIN32) && !defined(__CYGWIN__)
 #  if !defined(CMAKE_BOOT_MINGW)
-  this->Generators.push_back(cmGlobalVisualStudio15Generator::NewFactory());
+  this->Generators.push_back(
+    cmGlobalVisualStudioVersionedGenerator::NewFactory16());
+  this->Generators.push_back(
+    cmGlobalVisualStudioVersionedGenerator::NewFactory15());
   this->Generators.push_back(cmGlobalVisualStudio14Generator::NewFactory());
   this->Generators.push_back(cmGlobalVisualStudio12Generator::NewFactory());
   this->Generators.push_back(cmGlobalVisualStudio11Generator::NewFactory());
@@ -2012,7 +2024,8 @@ int cmake::CheckBuildSystem()
 
   // Read the rerun check file and use it to decide whether to do the
   // global generate.
-  cmake cm(RoleScript); // Actually, all we need is the `set` command.
+  // Actually, all we need is the `set` command.
+  cmake cm(RoleScript, cmState::Unknown);
   cm.SetHomeDirectory("");
   cm.SetHomeOutputDirectory("");
   cm.GetCurrentSnapshot().SetDefaultDefinitions();
@@ -2454,7 +2467,7 @@ static bool cmakeCheckStampList(const char* stampList, bool verbose)
   return true;
 }
 
-void cmake::IssueMessage(cmake::MessageType t, std::string const& text,
+void cmake::IssueMessage(MessageType t, std::string const& text,
                          cmListFileBacktrace const& backtrace) const
 {
   this->Messenger->IssueMessage(t, text, backtrace);
@@ -2681,7 +2694,7 @@ void cmake::RunCheckForUnusedVariables()
     }
   }
   if (haveUnused) {
-    this->IssueMessage(cmake::WARNING, msg.str());
+    this->IssueMessage(MessageType::WARNING, msg.str());
   }
 #endif
 }

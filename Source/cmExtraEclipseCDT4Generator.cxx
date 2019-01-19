@@ -5,6 +5,7 @@
 #include "cmsys/RegularExpression.hxx"
 #include <algorithm>
 #include <assert.h>
+#include <map>
 #include <sstream>
 #include <stdio.h>
 #include <utility>
@@ -15,6 +16,7 @@
 #include "cmGlobalGenerator.h"
 #include "cmLocalGenerator.h"
 #include "cmMakefile.h"
+#include "cmMessageType.h"
 #include "cmSourceFile.h"
 #include "cmSourceGroup.h"
 #include "cmState.h"
@@ -133,7 +135,7 @@ void cmExtraEclipseCDT4Generator::Generate()
   if (!this->GenerateSourceProject &&
       (mf->IsOn("ECLIPSE_CDT4_GENERATE_SOURCE_PROJECT"))) {
     mf->IssueMessage(
-      cmake::WARNING,
+      MessageType::WARNING,
       "ECLIPSE_CDT4_GENERATE_SOURCE_PROJECT is set to TRUE, "
       "but this variable is not supported anymore since CMake 2.8.7.\n"
       "Enable CMAKE_ECLIPSE_GENERATE_SOURCE_PROJECT instead.");
@@ -141,7 +143,7 @@ void cmExtraEclipseCDT4Generator::Generate()
 
   if (cmSystemTools::IsSubDirectory(this->HomeOutputDirectory,
                                     this->HomeDirectory)) {
-    mf->IssueMessage(cmake::WARNING,
+    mf->IssueMessage(MessageType::WARNING,
                      "The build directory is a subdirectory "
                      "of the source directory.\n"
                      "This is not supported well by Eclipse. It is strongly "
@@ -381,7 +383,6 @@ void cmExtraEclipseCDT4Generator::CreateProjectFile()
   xml.StartElement("natures");
   xml.Element("nature", "org.eclipse.cdt.make.core.makeNature");
   xml.Element("nature", "org.eclipse.cdt.make.core.ScannerConfigNature");
-  ;
 
   for (std::string const& n : this->Natures) {
     xml.Element("nature", n);

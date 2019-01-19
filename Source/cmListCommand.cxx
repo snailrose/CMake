@@ -12,14 +12,15 @@
 #include <stdexcept>
 #include <stdio.h>
 #include <stdlib.h> // required for atoi
+#include <utility>
 
 #include "cmAlgorithms.h"
 #include "cmGeneratorExpression.h"
 #include "cmMakefile.h"
+#include "cmMessageType.h"
 #include "cmPolicies.h"
 #include "cmStringReplaceHelper.h"
 #include "cmSystemTools.h"
-#include "cmake.h"
 
 class cmExecutionStatus;
 
@@ -122,7 +123,7 @@ bool cmListCommand::GetList(std::vector<std::string>& list,
       warn += " List has value = [";
       warn += listString;
       warn += "].";
-      this->Makefile->IssueMessage(cmake::AUTHOR_WARNING, warn);
+      this->Makefile->IssueMessage(MessageType::AUTHOR_WARNING, warn);
       return true;
     }
     case cmPolicies::OLD:
@@ -137,7 +138,7 @@ bool cmListCommand::GetList(std::vector<std::string>& list,
     case cmPolicies::REQUIRED_IF_USED:
     case cmPolicies::REQUIRED_ALWAYS:
       this->Makefile->IssueMessage(
-        cmake::FATAL_ERROR,
+        MessageType::FATAL_ERROR,
         cmPolicies::GetRequiredPolicyError(cmPolicies::CMP0007));
       return false;
   }

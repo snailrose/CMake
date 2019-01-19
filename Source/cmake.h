@@ -14,6 +14,8 @@
 
 #include "cmInstalledFile.h"
 #include "cmListFileCache.h"
+#include "cmMessageType.h"
+#include "cmState.h"
 #include "cmStateSnapshot.h"
 #include "cmStateTypes.h"
 
@@ -28,7 +30,6 @@ class cmGlobalGenerator;
 class cmGlobalGeneratorFactory;
 class cmMakefile;
 class cmMessenger;
-class cmState;
 class cmVariableWatch;
 struct cmDocumentationEntry;
 
@@ -66,19 +67,6 @@ public:
     RoleInternal, // no commands
     RoleScript,   // script commands
     RoleProject   // all commands
-  };
-
-  enum MessageType
-  {
-    AUTHOR_WARNING,
-    AUTHOR_ERROR,
-    FATAL_ERROR,
-    INTERNAL_ERROR,
-    MESSAGE,
-    WARNING,
-    LOG,
-    DEPRECATION_ERROR,
-    DEPRECATION_WARNING
   };
 
   enum DiagLevel
@@ -125,7 +113,7 @@ public:
   static const int DEFAULT_BUILD_PARALLEL_LEVEL = 0;
 
   /// Default constructor
-  cmake(Role role);
+  cmake(Role role, cmState::Mode mode);
   /// Destructor
   ~cmake();
 
@@ -277,8 +265,7 @@ public:
   int GetSystemInformation(std::vector<std::string>&);
 
   ///! Parse command line arguments
-  void SetArgs(const std::vector<std::string>&,
-               bool directoriesSetBefore = false);
+  void SetArgs(const std::vector<std::string>& args);
 
   ///! Is this cmake running as a result of a TRY_COMPILE command
   bool GetIsInTryCompile() const;
@@ -434,7 +421,7 @@ public:
 
   /** Display a message to the user.  */
   void IssueMessage(
-    cmake::MessageType t, std::string const& text,
+    MessageType t, std::string const& text,
     cmListFileBacktrace const& backtrace = cmListFileBacktrace()) const;
 
   ///! run the --build option
@@ -550,13 +537,13 @@ private:
    * Convert a message type between a warning and an error, based on the state
    * of the error output CMake variables, in the cache.
    */
-  cmake::MessageType ConvertMessageType(cmake::MessageType t) const;
+  MessageType ConvertMessageType(MessageType t) const;
 
   /*
    * Check if messages of this type should be output, based on the state of the
    * warning and error output CMake variables, in the cache.
    */
-  bool IsMessageTypeVisible(cmake::MessageType t) const;
+  bool IsMessageTypeVisible(MessageType t) const;
 };
 
 #define CMAKE_STANDARD_OPTIONS_TABLE                                          \

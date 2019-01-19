@@ -16,6 +16,7 @@
 #include "cmListFileCache.h"
 #include "cmLocalGenerator.h"
 #include "cmMakefile.h"
+#include "cmMessageType.h"
 #include "cmOutputConverter.h"
 #include "cmPolicies.h"
 #include "cmProcessOutput.h"
@@ -842,7 +843,7 @@ bool cmQtAutoGenInitializer::InitScanFiles()
           msg += ":\n  set_property(SOURCE file.h PROPERTY ";
           msg += property;
           msg += " ON)\n";
-          makefile->IssueMessage(cmake::AUTHOR_WARNING, msg);
+          makefile->IssueMessage(MessageType::AUTHOR_WARNING, msg);
         }
       }
     }
@@ -1231,11 +1232,7 @@ bool cmQtAutoGenInitializer::SetupCustomTargets()
   }
 
   // Write AUTORCC info files
-  if (this->Rcc.Enabled && !this->SetupWriteRccInfo()) {
-    return false;
-  }
-
-  return true;
+  return !this->Rcc.Enabled || this->SetupWriteRccInfo();
 }
 
 bool cmQtAutoGenInitializer::SetupWriteAutogenInfo()
@@ -1409,32 +1406,31 @@ static std::vector<cmQtAutoGenInitializer::IntegerVersion> GetKnownQtVersions(
   return result;
 }
 
-cmQtAutoGenInitializer::IntegerVersion cmQtAutoGenInitializer::GetQtVersion(
-  cmGeneratorTarget const* target)
+std::pair<cmQtAutoGenInitializer::IntegerVersion, unsigned int>
+cmQtAutoGenInitializer::GetQtVersion(cmGeneratorTarget const* target)
 {
+  std::pair<IntegerVersion, unsigned int> res(
+    IntegerVersion(),
+    CharPtrToInt(target->GetLinkInterfaceDependentStringProperty(
+      "QT_MAJOR_VERSION", "")));
+
   auto knownQtVersions = GetKnownQtVersions(target);
-  if (knownQtVersions.empty()) {
-    return cmQtAutoGenInitializer::IntegerVersion(); // No Qt
-  }
-
-  // Pick a version from the known versions:
-  auto targetVersion = CharPtrToInt(
-    target->GetLinkInterfaceDependentStringProperty("QT_MAJOR_VERSION", ""));
-
-  if (targetVersion == 0) {
-    // No specific version was requested by the target:
-    // Use highest known Qt version.
-    return knownQtVersions.at(0);
-  }
-
-  for (auto it : knownQtVersions) {
-    if (it.Major == targetVersion) {
-      return it;
+  if (!knownQtVersions.empty()) {
+    if (res.second == 0) {
+      // No specific version was requested by the target:
+      // Use highest known Qt version.
+      res.first = knownQtVersions.at(0);
+    } else {
+      // Pick a version from the known versions:
+      for (auto it : knownQtVersions) {
+        if (it.Major == res.second) {
+          res.first = it;
+          break;
+        }
+      }
     }
   }
-
-  // Requested version was not found
-  return cmQtAutoGenInitializer::IntegerVersion();
+  return res;
 }
 
 std::pair<bool, std::string> GetQtExecutable(
