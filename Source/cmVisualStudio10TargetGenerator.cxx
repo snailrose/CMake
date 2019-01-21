@@ -436,6 +436,15 @@ void cmVisualStudio10TargetGenerator::GenerateCSStandard()
   "$(MSBuildExtensionsPath)\\Microsoft\\WindowsXaml\\"                        \
   "v$(VisualStudioVersion)\\Microsoft.Windows.UI.Xaml.CSharp.targets"
 
+#define VS10_ANDROID_CSharp_TARGETS                                           \
+  "$(MSBuildExtensionsPath)\\Xamarin\\Android\\Xamarin.Android.CSharp."       \
+  "targets"
+
+#define VS10_IOS_CSharp_TARGETS                                               \
+  "$(MSBuildExtensionsPath)\\Xamarin\\iOS\\Xamarin.iOS.CSharp.targets"
+
+
+
 void cmVisualStudio10TargetGenerator::GenerateCSXamarinUWP()
 {
 
@@ -629,23 +638,9 @@ void cmVisualStudio10TargetGenerator::GenerateCSXamariniOS()
       Elem e0(BuildFileStream, "Project");
       e0.Attribute("DefaultTargets", "Build");
       this->ComputeCustomCommands();
-      if (!this->CSharpCustomCommandNames.empty()) {
-        std::string ini = "";
-        size_t size = this->CSharpCustomCommandNames.size(), i = 0;
-
-        for (std::string name : this->CSharpCustomCommandNames) {
-          ini += name;
-
-          if (i + 1 < size)
-            ini += ";";
-          ++i;
-        }
-        e0.Attribute("InitialTargets", ini);
-      }
 
       e0.Attribute("ToolsVersion", this->GlobalGenerator->GetToolsVersion());
-      e0.Attribute("xmlns",
-                   "http://schemas.microsoft.com/developer/msbuild/2003");
+      e0.Attribute("xmlns", "http://schemas.microsoft.com/developer/msbuild/2003");
 
       {
         Elem e1(e0, "Import");
@@ -658,12 +653,9 @@ void cmVisualStudio10TargetGenerator::GenerateCSXamariniOS()
         e1.Element("ProjectGuid", "{" + this->GUID + "}");
 
         if (this->GeneratorTarget->GetType() == cmStateEnums::EXECUTABLE)
-          e1.Element("OutputType", "AppContainerExe");
+          e1.Element("OutputType", "Exe");
         else
           e1.Element("OutputType", "Library");
-
-        e1.Element("AppDesignerFolder", "Properties");
-        e1.Element("DefaultLanguage", "en-US");
 
         std::vector<std::string> keys =
           this->GeneratorTarget->GetPropertyKeys();
@@ -678,46 +670,38 @@ void cmVisualStudio10TargetGenerator::GenerateCSXamariniOS()
           e1.Element(globalKey.c_str(), value);
         }
 
-        e1.Element("EnableDotNetNativeCompatibleProfile", "true");
-        e1.Element("FileAlignment", "512");
         e1.Element(
           "ProjectTypeGuids",
-          "{A5A43C5B-DE2A-4C0C-9213-0A381AF9435A};{FAE04EC0-301F-11D3-"
-          "BF4B-00C04F79EFBC}");
-        e1.Element("AppxBundlePlatforms", "x86");
+          "{FEACFBD2-3405-455C-9665-78FE426C6842};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}");
       }
 
       for (std::string const& c : this->Configurations) {
         Elem e1(e0, "PropertyGroup");
         e1.Attribute("Condition", this->CalcCondition(c));
         e1.Attribute("Label", "Configuration");
-
         if (this->MSTools) {
           Options& o = *(this->ClOptions[c]);
-
-          std::string constants = "TRACE;NETFX_CORE;WINDOWS_UWP";
-
           if (o.IsDebug()) {
             e1.Element("DebugSymbols", "true");
             e1.Element("DebugType", "full");
-
-            constants = "DEBUG;" + constants;
+            e1.Element("Optimize", "false");
+            e1.Element("DefineConstants", "DEBUG");
+            e1.Element("MtouchDebug", "true");
           } else {
+            e1.Element("DebugType", "none");
             e1.Element("Optimize", "true");
-            e1.Element("DebugType", "pdbonly");
-            e1.Element("UseDotNetNativeToolchain", "false");
           }
-
           std::string outDir = this->GeneratorTarget->GetDirectory(c) + "/";
           ConvertToWindowsSlash(outDir);
-          e1.Element("OutputPath", outDir);
 
-          e1.Element("DefineConstants", constants);
-          e1.Element("NoWarn", ";2008");
-          e1.Element("PlatformTarget", "x86");
-          e1.Element("UseVSHostingProcess", "false");
+          e1.Element("OutputPath", outDir);
           e1.Element("ErrorReport", "prompt");
-          e1.Element("Prefer32Bit", "true");
+          e1.Element("WarningLevel", "4");
+          e1.Element("MtouchArch", "ARM64");
+          e1.Element("CodesignKey", "iPhone Developer");
+          e1.Element("CodesignEntitlements", "Entitlements.plist");
+          e1.Element("ConsolePause", "false");
+          e1.Element("CodeAnalysisRuleSet", "MinimumRecommendedRules.ruleset");
         }
       }
 
@@ -735,7 +719,6 @@ void cmVisualStudio10TargetGenerator::GenerateCSXamariniOS()
         e1.SetHasElements();
         this->WriteEvents(e1, c);
       }
-
       {
         Elem e1(e0, "PropertyGroup");
         std::ostringstream oss;
@@ -747,10 +730,9 @@ void cmVisualStudio10TargetGenerator::GenerateCSXamariniOS()
             << "$(BuildDependsOn)\n";
         e1.Element("BuildDependsOn", oss.str());
       }
-
       {
         Elem e1(e0, "Import");
-        e1.Attribute("Project", VS10_UWP_CSharp_TARGETS);
+        e1.Attribute("Project", VS10_IOS_CSharp_TARGETS);
       }
     }
 
@@ -761,8 +743,6 @@ void cmVisualStudio10TargetGenerator::GenerateCSXamariniOS()
     // The groups are stored in a separate file for VS 10
     this->WriteGroups();
 }
-
-#define VS10_ANDROID_CSharp_TARGETS "$(MSBuildExtensionsPath)\\Xamarin\\Android\\Xamarin.Android.CSharp.targets"
 
 void cmVisualStudio10TargetGenerator::GenerateCSXamarinAndroid()
 {
@@ -802,19 +782,6 @@ void cmVisualStudio10TargetGenerator::GenerateCSXamarinAndroid()
       Elem e0(BuildFileStream, "Project");
       e0.Attribute("DefaultTargets", "Build");
       this->ComputeCustomCommands();
-      if (!this->CSharpCustomCommandNames.empty()) {
-        std::string ini = "";
-        size_t size = this->CSharpCustomCommandNames.size(), i = 0;
-
-        for (std::string name : this->CSharpCustomCommandNames) {
-          ini += name;
-
-          if (i + 1 < size)
-            ini += ";";
-          ++i;
-        }
-       /// e0.Attribute("InitialTargets", ini);
-      }
 
       e0.Attribute("ToolsVersion", this->GlobalGenerator->GetToolsVersion());
       e0.Attribute("xmlns",
@@ -861,7 +828,6 @@ void cmVisualStudio10TargetGenerator::GenerateCSXamarinAndroid()
           } else {
             e1.Element("Optimize", "true");
             e1.Element("DebugType", "pdbonly");
-            e1.Element("UseDotNetNativeToolchain", "false");
           }
 
           std::string outDir = this->GeneratorTarget->GetDirectory(c) + "/";
@@ -2479,6 +2445,11 @@ void cmVisualStudio10TargetGenerator::WriteExtraSource(Elem& e1,
   } else if (ext == "vsixmanifest") {
     subType = "Designer";
   }
+
+  if (const char* c = sf->GetProperty("VS_SUBTYPE")) {
+    subType = c;
+  }
+
   if (const char* c = sf->GetProperty("VS_COPY_TO_OUT_DIR")) {
     tool = "Content";
     copyToOutDir = c;
@@ -2686,6 +2657,9 @@ void cmVisualStudio10TargetGenerator::WriteSource(Elem& e2,
   }
   ConvertToWindowsSlash(sourceFile);
   e2.Attribute("Include", sourceFile);
+
+  if (sf->GetProperty("VS_TOOL_VISIBLE"))
+      e2.Element("Visible", "false");
 
   ToolSource toolSource = { sf, forceRelative };
   this->Tools[e2.Tag].push_back(toolSource);
