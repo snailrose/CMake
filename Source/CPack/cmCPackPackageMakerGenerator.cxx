@@ -30,9 +30,7 @@ cmCPackPackageMakerGenerator::cmCPackPackageMakerGenerator()
   this->PackageCompatibilityVersion = getVersion(10, 4);
 }
 
-cmCPackPackageMakerGenerator::~cmCPackPackageMakerGenerator()
-{
-}
+cmCPackPackageMakerGenerator::~cmCPackPackageMakerGenerator() = default;
 
 bool cmCPackPackageMakerGenerator::SupportsComponentInstallation() const
 {
@@ -340,16 +338,16 @@ int cmCPackPackageMakerGenerator::InitializeInternal()
   // If found, save result in the CPACK_INSTALLER_PROGRAM variable.
 
   std::vector<std::string> paths;
-  paths.push_back("/Applications/Xcode.app/Contents/Applications"
-                  "/PackageMaker.app/Contents/MacOS");
-  paths.push_back("/Applications/Utilities"
-                  "/PackageMaker.app/Contents/MacOS");
-  paths.push_back("/Applications"
-                  "/PackageMaker.app/Contents/MacOS");
-  paths.push_back("/Developer/Applications/Utilities"
-                  "/PackageMaker.app/Contents/MacOS");
-  paths.push_back("/Developer/Applications"
-                  "/PackageMaker.app/Contents/MacOS");
+  paths.emplace_back("/Applications/Xcode.app/Contents/Applications"
+                     "/PackageMaker.app/Contents/MacOS");
+  paths.emplace_back("/Applications/Utilities"
+                     "/PackageMaker.app/Contents/MacOS");
+  paths.emplace_back("/Applications"
+                     "/PackageMaker.app/Contents/MacOS");
+  paths.emplace_back("/Developer/Applications/Utilities"
+                     "/PackageMaker.app/Contents/MacOS");
+  paths.emplace_back("/Developer/Applications"
+                     "/PackageMaker.app/Contents/MacOS");
 
   std::string pkgPath;
   const char* inst_program = this->GetOption("CPACK_INSTALLER_PROGRAM");

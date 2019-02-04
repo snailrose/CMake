@@ -97,7 +97,7 @@ void cmLocalVisualStudio7Generator::FixGlobalTargets()
       force_commands.push_back(force_command);
       std::string no_main_dependency;
       std::string force = this->GetCurrentBinaryDirectory();
-      force += cmake::GetCMakeFilesDirectory();
+      force += "/CMakeFiles";
       force += "/";
       force += l->GetName();
       force += "_force";
@@ -144,7 +144,7 @@ void cmLocalVisualStudio7Generator::WriteStampFiles()
   // Touch a timestamp file used to determine when the project file is
   // out of date.
   std::string stampName = this->GetCurrentBinaryDirectory();
-  stampName += cmake::GetCMakeFilesDirectory();
+  stampName += "/CMakeFiles";
   cmSystemTools::MakeDirectory(stampName.c_str());
   stampName += "/";
   stampName += "generate.stamp";
@@ -254,7 +254,7 @@ cmSourceFile* cmLocalVisualStudio7Generator::CreateVCProjBuildRule()
 
   std::string stampName = this->GetCurrentBinaryDirectory();
   stampName += "/";
-  stampName += cmake::GetCMakeFilesDirectoryPostSlash();
+  stampName += "CMakeFiles/";
   stampName += "generate.stamp";
   cmCustomCommandLine commandLine;
   commandLine.push_back(cmSystemTools::GetCMakeCommand());
@@ -803,8 +803,8 @@ void cmLocalVisualStudio7Generator::WriteConfiguration(
       target->GetProperty("Fortran_MODULE_DIRECTORY");
     std::string modDir;
     if (target_mod_dir) {
-      modDir = this->ConvertToRelativePath(this->GetCurrentBinaryDirectory(),
-                                           target_mod_dir);
+      modDir = this->MaybeConvertToRelativePath(
+        this->GetCurrentBinaryDirectory(), target_mod_dir);
     } else {
       modDir = ".";
     }
@@ -1306,7 +1306,7 @@ void cmLocalVisualStudio7GeneratorInternals::OutputLibraries(
   for (ItemVector::const_iterator l = libs.begin(); l != libs.end(); ++l) {
     if (l->IsPath) {
       std::string rel =
-        lg->ConvertToRelativePath(currentBinDir, l->Value.c_str());
+        lg->MaybeConvertToRelativePath(currentBinDir, l->Value.c_str());
       fout << lg->ConvertToXMLOutputPath(rel.c_str()) << " ";
     } else if (!l->Target ||
                l->Target->GetType() != cmStateEnums::INTERFACE_LIBRARY) {
@@ -1332,7 +1332,7 @@ void cmLocalVisualStudio7GeneratorInternals::OutputObjects(
        i != objs.end(); ++i) {
     if (!(*i)->GetObjectLibrary().empty()) {
       std::string const& objFile = (*i)->GetFullPath();
-      std::string rel = lg->ConvertToRelativePath(currentBinDir, objFile);
+      std::string rel = lg->MaybeConvertToRelativePath(currentBinDir, objFile);
       fout << sep << lg->ConvertToXMLOutputPath(rel.c_str());
       sep = " ";
     }
@@ -1358,7 +1358,7 @@ void cmLocalVisualStudio7Generator::OutputLibraryDirectories(
     // Switch to a relative path specification if it is shorter.
     if (cmSystemTools::FileIsFullPath(dir.c_str())) {
       std::string rel =
-        this->ConvertToRelativePath(currentBinDir, dir.c_str());
+        this->MaybeConvertToRelativePath(currentBinDir, dir.c_str());
       if (rel.size() < dir.size()) {
         dir = rel;
       }

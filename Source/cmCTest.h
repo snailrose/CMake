@@ -57,8 +57,6 @@ public:
   /** Representation of one part.  */
   struct PartInfo
   {
-    PartInfo() {}
-
     void SetName(const std::string& name) { this->Name = name; }
     const std::string& GetName() const { return this->Name; }
 
@@ -175,6 +173,8 @@ public:
   void SetCTestConfiguration(const char* name, const char* value,
                              bool suppress = false);
   void EmptyCTestConfiguration();
+
+  std::string GetSubmitURL();
 
   /**
    * constructor and destructor

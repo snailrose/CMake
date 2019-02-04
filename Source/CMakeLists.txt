@@ -31,6 +31,16 @@ else()
   set(CMAKE_USE_ELF_PARSER)
 endif()
 
+if(NOT CMake_DEFAULT_RECURSION_LIMIT)
+  if(DEFINED ENV{DASHBOARD_TEST_FROM_CTEST})
+    set(CMake_DEFAULT_RECURSION_LIMIT 100)
+  elseif(MINGW)
+    set(CMake_DEFAULT_RECURSION_LIMIT 400)
+  else()
+    set(CMake_DEFAULT_RECURSION_LIMIT 1000)
+  endif()
+endif()
+
 if(APPLE)
   set(CMAKE_USE_MACH_PARSER 1)
 endif()
@@ -809,9 +819,10 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "sparc"
   endif()
 endif()
 
-# On Apple we need CoreFoundation
+# On Apple we need CoreFoundation and CoreServices
 if(APPLE)
   target_link_libraries(CMakeLib "-framework CoreFoundation")
+  target_link_libraries(CMakeLib "-framework CoreServices")
 endif()
 
 if(WIN32 AND NOT UNIX)

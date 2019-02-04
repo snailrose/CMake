@@ -74,15 +74,34 @@ public:
                   "Optional [arch] can be \"Win64\" or \"IA64\".";
   }
 
-  void GetGenerators(std::vector<std::string>& names) const override
+  std::vector<std::string> GetGeneratorNames() const override
   {
+    std::vector<std::string> names;
     names.push_back(vs10generatorName);
+    return names;
+  }
+
+  std::vector<std::string> GetGeneratorNamesWithPlatform() const override
+  {
+    std::vector<std::string> names;
     names.push_back(vs10generatorName + std::string(" IA64"));
     names.push_back(vs10generatorName + std::string(" Win64"));
+    return names;
   }
 
   bool SupportsToolset() const override { return true; }
   bool SupportsPlatform() const override { return true; }
+
+  std::vector<std::string> GetKnownPlatforms() const override
+  {
+    std::vector<std::string> platforms;
+    platforms.emplace_back("x64");
+    platforms.emplace_back("Win32");
+    platforms.emplace_back("Itanium");
+    return platforms;
+  }
+
+  std::string GetDefaultPlatformName() const override { return "Win32"; }
 };
 
 cmGlobalGeneratorFactory* cmGlobalVisualStudio10Generator::NewFactory()
@@ -588,10 +607,26 @@ cmGlobalVisualStudio10Generator::GetPlatformToolsetVersionString() const
 const char*
 cmGlobalVisualStudio10Generator::GetPlatformToolsetHostArchitecture() const
 {
-  if (!this->GeneratorToolsetHostArchitecture.empty()) {
-    return this->GeneratorToolsetHostArchitecture.c_str();
+  std::string const& hostArch =
+    this->GetPlatformToolsetHostArchitectureString();
+  if (hostArch.empty()) {
+    return nullptr;
   }
-  return nullptr;
+  return hostArch.c_str();
+}
+
+std::string const&
+cmGlobalVisualStudio10Generator::GetPlatformToolsetHostArchitectureString()
+  const
+{
+  if (!this->GeneratorToolsetHostArchitecture.empty()) {
+    return this->GeneratorToolsetHostArchitecture;
+  }
+  if (!this->DefaultPlatformToolsetHostArchitecture.empty()) {
+    return this->DefaultPlatformToolsetHostArchitecture;
+  }
+  static std::string const empty;
+  return empty;
 }
 
 const char* cmGlobalVisualStudio10Generator::GetPlatformToolsetCuda() const
@@ -687,7 +722,7 @@ bool cmGlobalVisualStudio10Generator::FindVCTargetsPath(cmMakefile* mf)
     wd = this->ConfiguredFilesPath;
   } else {
     wd = this->GetCMakeInstance()->GetHomeOutputDirectory();
-    wd += cmake::GetCMakeFilesDirectory();
+    wd += "/CMakeFiles";
   }
   wd += "/";
   wd += cmVersion::GetCMakeVersion();
@@ -767,10 +802,9 @@ bool cmGlobalVisualStudio10Generator::FindVCTargetsPath(cmMakefile* mf)
     }
     cmXMLElement(eprj, "Import")
       .Attribute("Project", "$(VCTargetsPath)\\Microsoft.Cpp.Default.props");
-    if (!this->GeneratorToolsetHostArchitecture.empty()) {
+    if (const char* hostArch = this->GetPlatformToolsetHostArchitecture()) {
       cmXMLElement epg(eprj, "PropertyGroup");
-      cmXMLElement(epg, "PreferredToolArchitecture")
-        .Content(this->GeneratorToolsetHostArchitecture);
+      cmXMLElement(epg, "PreferredToolArchitecture").Content(hostArch);
     }
     {
       cmXMLElement epg(eprj, "PropertyGroup");
@@ -845,7 +879,7 @@ bool cmGlobalVisualStudio10Generator::FindVCTargetsPath(cmMakefile* mf)
 }
 
 void cmGlobalVisualStudio10Generator::GenerateBuildCommand(
-  std::vector<std::string>& makeCommand, const std::string& makeProgram,
+  GeneratedMakeCommand& makeCommand, const std::string& makeProgram,
   const std::string& projectName, const std::string& projectDir,
   const std::string& targetName, const std::string& config, bool fast,
   int jobs, bool verbose, std::vector<std::string> const& makeOptions)
@@ -859,6 +893,10 @@ void cmGlobalVisualStudio10Generator::GenerateBuildCommand(
   cmSystemTools::LowerCase(makeProgramLower);
   bool useDevEnv = (makeProgramLower.find("devenv") != std::string::npos ||
                     makeProgramLower.find("vcexpress") != std::string::npos);
+
+  // Workaround to convince VCExpress.exe to produce output.
+  makeCommand.RequiresOutputForward =
+    (makeProgramLower.find("vcexpress") != std::string::npos);
 
   // MSBuild is preferred (and required for VS Express), but if the .sln has
   // an Intel Fortran .vfproj then we have to use devenv. Parse it to find out.
@@ -893,7 +931,7 @@ void cmGlobalVisualStudio10Generator::GenerateBuildCommand(
     return;
   }
 
-  makeCommand.push_back(makeProgramSelected);
+  makeCommand.add(makeProgramSelected);
 
   std::string realTarget = targetName;
   // msbuild.exe CxxOnly.sln /t:Build /p:Configuration=Debug /target:ALL_BUILD
@@ -902,8 +940,8 @@ void cmGlobalVisualStudio10Generator::GenerateBuildCommand(
     realTarget = "ALL_BUILD";
   }
   if (realTarget == "clean") {
-    makeCommand.push_back(std::string(projectName) + ".sln");
-    makeCommand.push_back("/t:Clean");
+    makeCommand.add(std::string(projectName) + ".sln");
+    makeCommand.add("/t:Clean");
   } else {
     std::string targetProject(realTarget);
     targetProject += ".vcxproj";
@@ -915,7 +953,7 @@ void cmGlobalVisualStudio10Generator::GenerateBuildCommand(
         cmSystemTools::ConvertToUnixSlashes(targetProject);
       }
     }
-    makeCommand.push_back(targetProject);
+    makeCommand.add(std::move(targetProject));
   }
   std::string configArg = "/p:Configuration=";
   if (!config.empty()) {
@@ -923,23 +961,26 @@ void cmGlobalVisualStudio10Generator::GenerateBuildCommand(
   } else {
     configArg += "Debug";
   }
-  makeCommand.push_back(configArg);
-  makeCommand.push_back("/p:Platform=" + this->GetPlatformName());
-  makeCommand.push_back(std::string("/p:VisualStudioVersion=") +
-                        this->GetIDEVersion());
+  makeCommand.add(configArg);
+  makeCommand.add(std::string("/p:Platform=") + this->GetPlatformName());
+  makeCommand.add(std::string("/p:VisualStudioVersion=") +
+                  this->GetIDEVersion());
 
   if (jobs != cmake::NO_BUILD_PARALLEL_LEVEL) {
     if (jobs == cmake::DEFAULT_BUILD_PARALLEL_LEVEL) {
-      makeCommand.push_back("/m");
+      makeCommand.add("/m");
     } else {
-      makeCommand.push_back(std::string("/m:") + std::to_string(jobs));
+      makeCommand.add(std::string("/m:") + std::to_string(jobs));
     }
     // Having msbuild.exe and cl.exe using multiple jobs is discouraged
-    makeCommand.push_back("/p:CL_MPCount=1");
+    makeCommand.add("/p:CL_MPCount=1");
   }
 
-  makeCommand.insert(makeCommand.end(), makeOptions.begin(),
-                     makeOptions.end());
+  // Respect the verbosity: 'n' normal will show build commands
+  //                        'm' minimal only the build step's title
+  makeCommand.add(std::string("/v:") + ((verbose) ? "n" : "m"));
+
+  makeCommand.add(makeOptions.begin(), makeOptions.end());
 }
 
 bool cmGlobalVisualStudio10Generator::Find64BitTools(cmMakefile* mf)
@@ -986,7 +1027,7 @@ std::string cmGlobalVisualStudio10Generator::GenerateRuleFile(
   // The VS 10 generator needs to create the .rule files on disk.
   // Hide them away under the CMakeFiles directory.
   std::string ruleDir = this->GetCMakeInstance()->GetHomeOutputDirectory();
-  ruleDir += cmake::GetCMakeFilesDirectory();
+  ruleDir += "/CMakeFiles";
   ruleDir += "/";
   ruleDir += cmSystemTools::ComputeStringMD5(
     cmSystemTools::GetFilenamePath(output).c_str());

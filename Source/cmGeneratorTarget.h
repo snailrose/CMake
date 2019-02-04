@@ -27,11 +27,12 @@ class cmTarget;
 
 class cmGeneratorTarget
 {
-  CM_DISABLE_COPY(cmGeneratorTarget)
-
 public:
   cmGeneratorTarget(cmTarget*, cmLocalGenerator* lg);
   ~cmGeneratorTarget();
+
+  cmGeneratorTarget(cmGeneratorTarget const&) = delete;
+  cmGeneratorTarget& operator=(cmGeneratorTarget const&) = delete;
 
   cmLocalGenerator* GetLocalGenerator() const;
 
@@ -111,7 +112,6 @@ public:
     std::set<std::string> ExpectedXamlHeaders;
     std::set<std::string> ExpectedXamlSources;
     bool Initialized = false;
-    KindedSources() {}
   };
 
   /** Get all sources needed for a configuration with kinds assigned.  */
@@ -536,7 +536,7 @@ public:
    */
   void ClearSourcesCache();
 
-  void AddSource(const std::string& src);
+  void AddSource(const std::string& src, bool before = false);
   void AddTracedSources(std::vector<std::string> const& srcs);
 
   /**
@@ -562,7 +562,6 @@ public:
   };
   struct SourceFileFlags
   {
-    SourceFileFlags() {}
     SourceFileType Type = SourceFileTypeNormal;
     const char* MacFolder = nullptr; // location inside Mac content folders
   };
@@ -694,7 +693,7 @@ public:
   const char* GetSourcesProperty() const;
 
 private:
-  void AddSourceCommon(const std::string& src);
+  void AddSourceCommon(const std::string& src, bool before = false);
 
   std::string CreateFortranModuleDirectory(
     std::string const& working_dir) const;
@@ -750,7 +749,6 @@ private:
 
   struct CompatibleInterfaces : public CompatibleInterfacesBase
   {
-    CompatibleInterfaces() {}
     bool Done = false;
   };
   mutable std::map<std::string, CompatibleInterfaces> CompatibleInterfacesMap;
@@ -764,7 +762,6 @@ private:
 
   struct LinkImplClosure : public std::vector<cmGeneratorTarget const*>
   {
-    LinkImplClosure() {}
     bool Done = false;
   };
   mutable std::map<std::string, LinkImplClosure> LinkImplClosureMap;
@@ -784,7 +781,6 @@ private:
   // Cache import information from properties for each configuration.
   struct ImportInfo
   {
-    ImportInfo() {}
     bool NoSOName = false;
     ManagedType Managed = Native;
     unsigned int Multiplicity = 0;

@@ -133,13 +133,27 @@ public:
     cmGlobalXCodeGenerator::GetDocumentation(entry);
   }
 
-  void GetGenerators(std::vector<std::string>& names) const override
+  std::vector<std::string> GetGeneratorNames() const override
   {
+    std::vector<std::string> names;
     names.push_back(cmGlobalXCodeGenerator::GetActualName());
+    return names;
+  }
+
+  std::vector<std::string> GetGeneratorNamesWithPlatform() const override
+  {
+    return std::vector<std::string>();
   }
 
   bool SupportsToolset() const override { return true; }
   bool SupportsPlatform() const override { return false; }
+
+  std::vector<std::string> GetKnownPlatforms() const override
+  {
+    return std::vector<std::string>();
+  }
+
+  std::string GetDefaultPlatformName() const override { return std::string(); }
 };
 
 cmGlobalXCodeGenerator::cmGlobalXCodeGenerator(
@@ -177,12 +191,14 @@ cmGlobalGenerator* cmGlobalXCodeGenerator::Factory::CreateGlobalGenerator(
   std::string versionFile;
   {
     std::string out;
-    std::string::size_type pos = 0;
-    if (cmSystemTools::RunSingleCommand("xcode-select --print-path", &out,
-                                        nullptr, nullptr, nullptr,
-                                        cmSystemTools::OUTPUT_NONE) &&
-        (pos = out.find(".app/"), pos != std::string::npos)) {
-      versionFile = out.substr(0, pos + 5) + "Contents/version.plist";
+    bool commandResult = cmSystemTools::RunSingleCommand(
+      "xcode-select --print-path", &out, nullptr, nullptr, nullptr,
+      cmSystemTools::OUTPUT_NONE);
+    if (commandResult) {
+      std::string::size_type pos = out.find(".app/");
+      if (pos != std::string::npos) {
+        versionFile = out.substr(0, pos + 5) + "Contents/version.plist";
+      }
     }
   }
   if (!versionFile.empty() && cmSystemTools::FileExists(versionFile.c_str())) {
@@ -323,20 +339,22 @@ bool cmGlobalXCodeGenerator::Open(const std::string& bindir,
 }
 
 void cmGlobalXCodeGenerator::GenerateBuildCommand(
-  std::vector<std::string>& makeCommand, const std::string& makeProgram,
+  GeneratedMakeCommand& makeCommand, const std::string& makeProgram,
   const std::string& projectName, const std::string& /*projectDir*/,
   const std::string& targetName, const std::string& config, bool /*fast*/,
   int jobs, bool /*verbose*/, std::vector<std::string> const& makeOptions)
 {
   // now build the test
-  makeCommand.push_back(
+  makeCommand.add(
     this->SelectMakeProgram(makeProgram, this->GetXcodeBuildCommand()));
 
-  makeCommand.push_back("-project");
-  std::string projectArg = projectName;
-  projectArg += ".xcode";
-  projectArg += "proj";
-  makeCommand.push_back(projectArg);
+  if (!projectName.empty()) {
+    makeCommand.add("-project");
+    std::string projectArg = projectName;
+    projectArg += ".xcode";
+    projectArg += "proj";
+    makeCommand.add(projectArg);
+  }
 
   bool clean = false;
   std::string realTarget = targetName;
@@ -344,29 +362,22 @@ void cmGlobalXCodeGenerator::GenerateBuildCommand(
     clean = true;
     realTarget = "ALL_BUILD";
   }
-  if (clean) {
-    makeCommand.push_back("clean");
-  } else {
-    makeCommand.push_back("build");
-  }
-  makeCommand.push_back("-target");
-  if (!realTarget.empty()) {
-    makeCommand.push_back(realTarget);
-  } else {
-    makeCommand.push_back("ALL_BUILD");
-  }
-  makeCommand.push_back("-configuration");
-  makeCommand.push_back(!config.empty() ? config : "Debug");
+
+  makeCommand.add((clean ? "clean" : "build"));
+  makeCommand.add("-target", (realTarget.empty() ? "ALL_BUILD" : realTarget));
+  makeCommand.add("-configuration", (config.empty() ? "Debug" : config));
 
   if (jobs != cmake::NO_BUILD_PARALLEL_LEVEL) {
-    makeCommand.push_back("-jobs");
+    makeCommand.add("-jobs");
     if (jobs != cmake::DEFAULT_BUILD_PARALLEL_LEVEL) {
-      makeCommand.push_back(std::to_string(jobs));
+      makeCommand.add(std::to_string(jobs));
     }
   }
 
-  makeCommand.insert(makeCommand.end(), makeOptions.begin(),
-                     makeOptions.end());
+  if (this->XcodeVersion >= 70) {
+    makeCommand.add("-hideShellScriptEnvironment");
+  }
+  makeCommand.add(makeOptions.begin(), makeOptions.end());
 }
 
 ///! Create a local generator appropriate to this Global Generator
@@ -474,6 +485,7 @@ std::string cmGlobalXCodeGenerator::PostBuildMakeTarget(
 }
 
 #define CMAKE_CHECK_BUILD_SYSTEM_TARGET "ZERO_CHECK"
+#define OBJECT_LIBRARY_ARTIFACT_DIR std::string()
 
 void cmGlobalXCodeGenerator::AddExtraTargets(
   cmLocalGenerator* root, std::vector<cmLocalGenerator*>& gens)
@@ -498,6 +510,7 @@ void cmGlobalXCodeGenerator::AddExtraTargets(
   makeHelper.push_back(dir);
   makeHelper.push_back("-f");
   makeHelper.push_back(this->CurrentXCodeHackMakefile);
+  makeHelper.push_back("OBJDIR=$(OBJDIR)");
   makeHelper.push_back(""); // placeholder, see below
 
   // Add ZERO_CHECK
@@ -522,10 +535,6 @@ void cmGlobalXCodeGenerator::AddExtraTargets(
   // now make the allbuild depend on all the non-utility targets
   // in the project
   for (auto& gen : gens) {
-    if (this->IsExcluded(root, gen)) {
-      continue;
-    }
-
     for (auto target : gen->GetGeneratorTargets()) {
       if (target->GetType() == cmStateEnums::GLOBAL_TARGET) {
         continue;
@@ -558,8 +567,7 @@ void cmGlobalXCodeGenerator::AddExtraTargets(
           false, "", false, cmMakefile::AcceptObjectLibraryCommands);
       }
 
-      if (target->GetType() != cmStateEnums::INTERFACE_LIBRARY &&
-          !target->GetPropertyAsBool("EXCLUDE_FROM_ALL")) {
+      if (!this->IsExcluded(target)) {
         allbuild->AddUtility(target->GetName());
       }
     }
@@ -607,7 +615,7 @@ void cmGlobalXCodeGenerator::CreateReRunCMakeFile(
 
   std::string checkCache = root->GetBinaryDirectory();
   checkCache += "/";
-  checkCache += cmake::GetCMakeFilesDirectoryPostSlash();
+  checkCache += "CMakeFiles/";
   checkCache += "cmake.check_cache";
 
   if (cm->DoWriteGlobVerifyTarget()) {
@@ -746,8 +754,6 @@ cmXCodeObject* cmGlobalXCodeGenerator::CreateXCodeSourceFileFromPath(
 class XCodeGeneratorExpressionInterpreter
   : public cmGeneratorExpressionInterpreter
 {
-  CM_DISABLE_COPY(XCodeGeneratorExpressionInterpreter)
-
 public:
   XCodeGeneratorExpressionInterpreter(cmSourceFile* sourceFile,
                                       cmLocalGenerator* localGenerator,
@@ -758,6 +764,11 @@ public:
     , SourceFile(sourceFile)
   {
   }
+
+  XCodeGeneratorExpressionInterpreter(
+    XCodeGeneratorExpressionInterpreter const&) = delete;
+  XCodeGeneratorExpressionInterpreter& operator=(
+    XCodeGeneratorExpressionInterpreter const&) = delete;
 
   using cmGeneratorExpressionInterpreter::Evaluate;
 
@@ -1051,7 +1062,7 @@ void cmGlobalXCodeGenerator::SetCurrentLocalGenerator(cmLocalGenerator* gen)
   this->CurrentConfigurationTypes.clear();
   this->CurrentMakefile->GetConfigurations(this->CurrentConfigurationTypes);
   if (this->CurrentConfigurationTypes.empty()) {
-    this->CurrentConfigurationTypes.push_back("");
+    this->CurrentConfigurationTypes.emplace_back();
   }
 }
 
@@ -1397,7 +1408,7 @@ void cmGlobalXCodeGenerator::ForceLinkerLanguage(cmGeneratorTarget* gtgt)
   // language.
   cmMakefile* mf = gtgt->Target->GetMakefile();
   std::string fname = gtgt->GetLocalGenerator()->GetCurrentBinaryDirectory();
-  fname += cmake::GetCMakeFilesDirectory();
+  fname += "/CMakeFiles";
   fname += "/";
   fname += gtgt->GetName();
   fname += "-CMakeForceLinker";
@@ -1655,6 +1666,7 @@ void cmGlobalXCodeGenerator::AddCommandsToBuildPhase(
   makecmd += cdir;
   makecmd += " -f ";
   makecmd += this->ConvertToRelativeForMake((makefile + "$CONFIGURATION"));
+  makecmd += " OBJDIR=$(basename \"$OBJECT_FILE_DIR_normal\")";
   makecmd += " all";
   buildphase->AddAttribute("shellScript", this->CreateString(makecmd));
   buildphase->AddAttribute("showEnvVarsInLog", this->CreateString("0"));
@@ -1962,8 +1974,8 @@ void cmGlobalXCodeGenerator::CreateBuildSettings(cmGeneratorTarget* gtgt,
     pnbase = gtgt->GetName();
     pnsuffix = ".a";
 
-    std::string pncdir =
-      this->GetObjectsNormalDirectory(this->CurrentProject, configName, gtgt);
+    std::string pncdir = this->GetObjectsDirectory(
+      this->CurrentProject, configName, gtgt, OBJECT_LIBRARY_ARTIFACT_DIR);
     buildSettings->AddAttribute("CONFIGURATION_BUILD_DIR",
                                 this->CreateString(pncdir));
   }
@@ -3193,9 +3205,9 @@ bool cmGlobalXCodeGenerator::CreateXCodeObjects(
   return true;
 }
 
-std::string cmGlobalXCodeGenerator::GetObjectsNormalDirectory(
+std::string cmGlobalXCodeGenerator::GetObjectsDirectory(
   const std::string& projName, const std::string& configName,
-  const cmGeneratorTarget* t) const
+  const cmGeneratorTarget* t, const std::string& variant) const
 {
   std::string dir = t->GetLocalGenerator()->GetCurrentBinaryDirectory();
   dir += "/";
@@ -3204,8 +3216,8 @@ std::string cmGlobalXCodeGenerator::GetObjectsNormalDirectory(
   dir += configName;
   dir += "/";
   dir += t->GetName();
-  dir += ".build/Objects-normal/";
-
+  dir += ".build/";
+  dir += variant;
   return dir;
 }
 
@@ -3332,8 +3344,9 @@ void cmGlobalXCodeGenerator::CreateXCodeDependHackTarget(
         for (auto objLib : objlibs) {
 
           const std::string objLibName = objLib->GetName();
-          std::string d = this->GetObjectsNormalDirectory(this->CurrentProject,
-                                                          configName, objLib);
+          std::string d =
+            this->GetObjectsDirectory(this->CurrentProject, configName, objLib,
+                                      OBJECT_LIBRARY_ARTIFACT_DIR);
           d += "lib";
           d += objLibName;
           d += ".a";
@@ -3350,8 +3363,8 @@ void cmGlobalXCodeGenerator::CreateXCodeDependHackTarget(
         // if building for more than one architecture
         // then remove those executables as well
         if (this->Architectures.size() > 1) {
-          std::string universal = this->GetObjectsNormalDirectory(
-            this->CurrentProject, configName, gt);
+          std::string universal = this->GetObjectsDirectory(
+            this->CurrentProject, configName, gt, "$(OBJDIR)/");
           for (const auto& architecture : this->Architectures) {
             std::string universalFile = universal;
             universalFile += architecture;
@@ -3570,7 +3583,7 @@ std::string cmGlobalXCodeGenerator::RelativeToSource(const char* p)
 
 std::string cmGlobalXCodeGenerator::RelativeToBinary(const char* p)
 {
-  return this->CurrentLocalGenerator->ConvertToRelativePath(
+  return this->CurrentLocalGenerator->MaybeConvertToRelativePath(
     cmSystemTools::JoinPath(this->ProjectOutputDirectoryComponents), p);
 }
 
@@ -3705,7 +3718,7 @@ std::string cmGlobalXCodeGenerator::ComputeInfoPListLocation(
   cmGeneratorTarget* target)
 {
   std::string plist = target->GetLocalGenerator()->GetCurrentBinaryDirectory();
-  plist += cmake::GetCMakeFilesDirectory();
+  plist += "/CMakeFiles";
   plist += "/";
   plist += target->GetName();
   plist += ".dir/Info.plist";
@@ -3755,8 +3768,8 @@ void cmGlobalXCodeGenerator::ComputeTargetObjectDirectory(
   cmGeneratorTarget* gt) const
 {
   std::string configName = this->GetCMakeCFGIntDir();
-  std::string dir =
-    this->GetObjectsNormalDirectory("$(PROJECT_NAME)", configName, gt);
+  std::string dir = this->GetObjectsDirectory(
+    "$(PROJECT_NAME)", configName, gt, "$(OBJECT_FILE_DIR_normal:base)/");
   dir += this->ObjectDirArch;
   dir += "/";
   gt->ObjectDirectory = dir;

@@ -289,6 +289,14 @@ following options:
 ``--use-stderr``
   Ignored.  Behavior is default in CMake >= 3.0.
 
+``-v, --verbose``
+  Enable verbose output - if supported - including the build commands to be
+  executed.
+
+  This option can be omitted if :envvar:`VERBOSE` environment variable or
+  :variable:`CMAKE_VERBOSE_MAKEFILE` cached variable is set.
+
+
 ``--``
   Pass remaining options to the native tool.
 
@@ -373,9 +381,10 @@ Available commands are:
 ``chdir <dir> <cmd> [<arg>...]``
   Change the current working directory and run a command.
 
-``compare_files <file1> <file2>``
+``compare_files [--ignore-eol] <file1> <file2>``
   Check if ``<file1>`` is same as ``<file2>``. If files are the same,
-  then returns 0, if not it returns 1.
+  then returns 0, if not it returns 1.  The ``--ignore-eol`` option
+  implies line-wise comparison and ignores LF/CRLF differences.
 
 ``copy <file>... <destination>``
   Copy files to ``<destination>`` (either file or directory).

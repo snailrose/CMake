@@ -22,7 +22,7 @@ public:
   bool SetGeneratorPlatform(std::string const& p, cmMakefile* mf) override;
   bool SetGeneratorToolset(std::string const& ts, cmMakefile* mf) override;
 
-  void GenerateBuildCommand(std::vector<std::string>& makeCommand,
+  void GenerateBuildCommand(GeneratedMakeCommand& makeCommand,
                             const std::string& makeProgram,
                             const std::string& projectName,
                             const std::string& projectDir,
@@ -58,6 +58,7 @@ public:
 
   /** The toolset host architecture name (e.g. x64 for 64-bit host tools).  */
   const char* GetPlatformToolsetHostArchitecture() const;
+  std::string const& GetPlatformToolsetHostArchitectureString() const;
 
   /** The cuda toolset version.  */
   const char* GetPlatformToolsetCuda() const;
@@ -152,6 +153,7 @@ protected:
   std::string GeneratorToolsetHostArchitecture;
   std::string GeneratorToolsetCuda;
   std::string DefaultPlatformToolset;
+  std::string DefaultPlatformToolsetHostArchitecture;
   std::string WindowsTargetPlatformVersion;
   std::string SystemName;
   std::string SystemVersion;

@@ -185,6 +185,9 @@ bool cmFileCommand::InitialPass(std::vector<std::string> const& args,
   if (subCommand == "READ_SYMLINK") {
     return this->HandleReadSymlinkCommand(args);
   }
+  if (subCommand == "CREATE_LINK") {
+    return this->HandleCreateLinkCommand(args);
+  }
 
   std::string e = "does not recognize sub-command " + subCommand;
   this->SetError(e);
@@ -558,7 +561,7 @@ bool cmFileCommand::HandleStringsCommand(std::vector<std::string> const& args)
   if (hex_conversion_enabled) {
     // TODO: should work without temp file, but just on a memory buffer
     std::string binaryFileName = this->Makefile->GetCurrentBinaryDirectory();
-    binaryFileName += cmake::GetCMakeFilesDirectory();
+    binaryFileName += "/CMakeFiles";
     binaryFileName += "/FileCommandStringsBinaryFile";
     if (cmHexFileConverter::TryConvert(fileName.c_str(),
                                        binaryFileName.c_str())) {
@@ -1076,7 +1079,7 @@ struct cmFileCopier
     , Doing(DoingNone)
   {
   }
-  virtual ~cmFileCopier() {}
+  virtual ~cmFileCopier() = default;
 
   bool Run(std::vector<std::string> const& args);
 
@@ -1099,7 +1102,6 @@ protected:
   {
     bool Exclude = false;
     mode_t Permissions = 0;
-    MatchProperties() {}
   };
   struct MatchRule
   {
@@ -2458,7 +2460,7 @@ bool cmFileCommand::HandleRename(std::vector<std::string> const& args)
     newname += "/" + args[2];
   }
 
-  if (!cmSystemTools::RenameFile(oldname.c_str(), newname.c_str())) {
+  if (!cmSystemTools::RenameFile(oldname, newname)) {
     std::string err = cmSystemTools::GetLastSystemError();
     std::ostringstream e;
     /* clang-format off */
@@ -2913,10 +2915,6 @@ bool cmFileCommand::HandleDownloadCommand(std::vector<std::string> const& args)
   ::CURLcode res = ::curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
   check_curl_result(res, "DOWNLOAD cannot set url: ");
 
-  // enable auth
-  res = ::curl_easy_setopt(curl, CURLOPT_HTTPAUTH, CURLAUTH_ANY);
-  check_curl_result(res, "DOWNLOAD cannot set httpauth: ");
-
   // enable HTTP ERROR parsing
   res = ::curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1);
   check_curl_result(res, "DOWNLOAD cannot set http failure option: ");
@@ -3215,10 +3213,6 @@ bool cmFileCommand::HandleUploadCommand(std::vector<std::string> const& args)
 
   res = ::curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
   check_curl_result(res, "UPLOAD cannot set url: ");
-
-  // enable auth
-  res = ::curl_easy_setopt(curl, CURLOPT_HTTPAUTH, CURLAUTH_ANY);
-  check_curl_result(res, "UPLOAD cannot set httpauth: ");
 
   res =
     ::curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, cmWriteToMemoryCallback);
@@ -3667,6 +3661,121 @@ bool cmFileCommand::HandleReadSymlinkCommand(
   }
 
   this->Makefile->AddDefinition(outputVariable, result.c_str());
+
+  return true;
+}
+
+bool cmFileCommand::HandleCreateLinkCommand(
+  std::vector<std::string> const& args)
+{
+  if (args.size() < 3) {
+    this->SetError("CREATE_LINK must be called with at least two additional "
+                   "arguments");
+    return false;
+  }
+
+  cmCommandArgumentsHelper argHelper;
+  cmCommandArgumentGroup group;
+
+  cmCAString linkArg(&argHelper, "CREATE_LINK");
+  cmCAString fileArg(&argHelper, nullptr);
+  cmCAString newFileArg(&argHelper, nullptr);
+
+  cmCAString resultArg(&argHelper, "RESULT", &group);
+  cmCAEnabler copyOnErrorArg(&argHelper, "COPY_ON_ERROR", &group);
+  cmCAEnabler symbolicArg(&argHelper, "SYMBOLIC", &group);
+
+  linkArg.Follows(nullptr);
+  fileArg.Follows(&linkArg);
+  newFileArg.Follows(&fileArg);
+  group.Follows(&newFileArg);
+
+  std::vector<std::string> unconsumedArgs;
+  argHelper.Parse(&args, &unconsumedArgs);
+
+  if (!unconsumedArgs.empty()) {
+    this->SetError("unknown argument: \"" + unconsumedArgs.front() + '\"');
+    return false;
+  }
+
+  std::string fileName = fileArg.GetString();
+  std::string newFileName = newFileArg.GetString();
+
+  // Output variable for storing the result.
+  const std::string& resultVar = resultArg.GetString();
+
+  // The system error message generated in the operation.
+  std::string result;
+
+  // Check if the paths are distinct.
+  if (fileName == newFileName) {
+    result = "CREATE_LINK cannot use same file and newfile";
+    if (!resultVar.empty()) {
+      this->Makefile->AddDefinition(resultVar, result.c_str());
+      return true;
+    }
+    this->SetError(result);
+    return false;
+  }
+
+  // Hard link requires original file to exist.
+  if (!symbolicArg.IsEnabled() && !cmSystemTools::FileExists(fileName)) {
+    result = "Cannot hard link \'" + fileName + "\' as it does not exist.";
+    if (!resultVar.empty()) {
+      this->Makefile->AddDefinition(resultVar, result.c_str());
+      return true;
+    }
+    this->SetError(result);
+    return false;
+  }
+
+  // Check if the new file already exists and remove it.
+  if ((cmSystemTools::FileExists(newFileName) ||
+       cmSystemTools::FileIsSymlink(newFileName)) &&
+      !cmSystemTools::RemoveFile(newFileName)) {
+    std::ostringstream e;
+    e << "Failed to create link '" << newFileName
+      << "' because existing path cannot be removed: "
+      << cmSystemTools::GetLastSystemError() << "\n";
+
+    if (!resultVar.empty()) {
+      this->Makefile->AddDefinition(resultVar, e.str().c_str());
+      return true;
+    }
+    this->SetError(e.str());
+    return false;
+  }
+
+  // Whether the operation completed successfully.
+  bool completed = false;
+
+  // Check if the command requires a symbolic link.
+  if (symbolicArg.IsEnabled()) {
+    completed = cmSystemTools::CreateSymlink(fileName, newFileName, &result);
+  } else {
+    completed = cmSystemTools::CreateLink(fileName, newFileName, &result);
+  }
+
+  // Check if copy-on-error is enabled in the arguments.
+  if (!completed && copyOnErrorArg.IsEnabled()) {
+    completed = cmSystemTools::cmCopyFile(fileName, newFileName);
+    if (!completed) {
+      result = "Copy failed: " + cmSystemTools::GetLastSystemError();
+    }
+  }
+
+  // Check if the operation was successful.
+  if (completed) {
+    result = "0";
+  } else if (resultVar.empty()) {
+    // The operation failed and the result is not reported in a variable.
+    this->SetError(result);
+    return false;
+  }
+
+  if (!resultVar.empty()) {
+    this->Makefile->AddDefinition(resultVar, result.c_str());
+  }
 
   return true;
 }

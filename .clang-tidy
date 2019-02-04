@@ -11,13 +11,9 @@ misc-*,\
 -misc-static-assert,\
 modernize-*,\
 -modernize-deprecated-headers,\
--modernize-pass-by-value,\
 -modernize-raw-string-literal,\
 -modernize-return-braced-init-list,\
 -modernize-use-auto,\
--modernize-use-emplace,\
--modernize-use-equals-default,\
--modernize-use-equals-delete,\
 -modernize-use-noexcept,\
 -modernize-use-transparent-functors,\
 -modernize-use-using,\
@@ -37,4 +33,6 @@ HeaderFilterRegex: 'Source/cm[^/]*\.(h|hxx|cxx)$'
 CheckOptions:
   - key:   modernize-use-default-member-init.UseAssignment
     value: '1'
+  - key:   modernize-use-equals-default.IgnoreMacros
+    value: '0'
 ...

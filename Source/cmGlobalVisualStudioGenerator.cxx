@@ -201,7 +201,7 @@ void cmGlobalVisualStudioGenerator::AddExtraIDETargets()
               tgt->IsImported()) {
             continue;
           }
-          if (!this->IsExcluded(gen[0], tgt)) {
+          if (!this->IsExcluded(tgt)) {
             allBuild->AddUtility(tgt->GetName());
           }
         }
@@ -262,13 +262,12 @@ void cmGlobalVisualStudioGenerator::ConfigureCMakeVisualStudioMacros()
     // purposes but newer versions distributed with CMake will replace
     // older versions in user directories.
     int res;
-    if (!cmSystemTools::FileTimeCompare(src.c_str(), dst.c_str(), &res) ||
-        res > 0) {
-      if (!cmSystemTools::CopyFileAlways(src.c_str(), dst.c_str())) {
+    if (!cmSystemTools::FileTimeCompare(src, dst, &res) || res > 0) {
+      if (!cmSystemTools::CopyFileAlways(src, dst)) {
         std::ostringstream oss;
         oss << "Could not copy from: " << src << std::endl;
         oss << "                 to: " << dst << std::endl;
-        cmSystemTools::Message(oss.str().c_str(), "Warning");
+        cmSystemTools::Message(oss.str(), "Warning");
       }
     }
 
@@ -783,7 +782,7 @@ void RegisterVisualStudioMacros(const std::string& macrosFile,
           << "CMake needs to register Visual Studio macros when its macros"
           << " file is updated or when it detects that its current macros file"
           << " is no longer registered with Visual Studio." << std::endl;
-      cmSystemTools::Message(oss.str().c_str(), "Warning");
+      cmSystemTools::Message(oss.str(), "Warning");
 
       // Count them again now that the warning is over. In the case of a GUI
       // warning, the user may have gone to close Visual Studio and then come

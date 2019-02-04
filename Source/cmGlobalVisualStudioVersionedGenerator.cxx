@@ -10,14 +10,45 @@
 #include "cmake.h"
 
 #if defined(_M_ARM64)
-#  define HOST_PLATFORM_NAME "ARM64";
+#  define HOST_PLATFORM_NAME "ARM64"
+#  define HOST_TOOLS_ARCH ""
 #elif defined(_M_ARM)
-#  define HOST_PLATFORM_NAME "ARM";
+#  define HOST_PLATFORM_NAME "ARM"
+#  define HOST_TOOLS_ARCH ""
 #elif defined(_M_IA64)
-#  define HOST_PLATFORM_NAME "Itanium";
+#  define HOST_PLATFORM_NAME "Itanium"
+#  define HOST_TOOLS_ARCH ""
 #else
 #  include "cmsys/SystemInformation.hxx"
 #endif
+
+static std::string VSHostPlatformName()
+{
+#ifdef HOST_PLATFORM_NAME
+  return HOST_PLATFORM_NAME;
+#else
+  cmsys::SystemInformation info;
+  if (info.Is64Bits()) {
+    return "x64";
+  } else {
+    return "Win32";
+  }
+#endif
+}
+
+static std::string VSHostArchitecture()
+{
+#ifdef HOST_TOOLS_ARCH
+  return HOST_TOOLS_ARCH;
+#else
+  cmsys::SystemInformation info;
+  if (info.Is64Bits()) {
+    return "x64";
+  } else {
+    return "x86";
+  }
+#endif
+}
 
 static unsigned int VSVersionToMajor(
   cmGlobalVisualStudioGenerator::VSVersion v)
@@ -58,8 +89,7 @@ static const char* VSVersionToToolset(
     case cmGlobalVisualStudioGenerator::VS15:
       return "v141";
     case cmGlobalVisualStudioGenerator::VS16:
-      // FIXME: VS 2019 Preview 1.1 uses v141 but preview 2 will use v142.
-      return "v141";
+      return "v142";
   }
   return "";
 }
@@ -118,15 +148,35 @@ public:
                   "Optional [arch] can be \"Win64\" or \"ARM\".";
   }
 
-  void GetGenerators(std::vector<std::string>& names) const override
+  std::vector<std::string> GetGeneratorNames() const override
   {
+    std::vector<std::string> names;
     names.push_back(vs15generatorName);
+    return names;
+  }
+
+  std::vector<std::string> GetGeneratorNamesWithPlatform() const override
+  {
+    std::vector<std::string> names;
     names.push_back(vs15generatorName + std::string(" ARM"));
     names.push_back(vs15generatorName + std::string(" Win64"));
+    return names;
   }
 
   bool SupportsToolset() const override { return true; }
   bool SupportsPlatform() const override { return true; }
+
+  std::vector<std::string> GetKnownPlatforms() const override
+  {
+    std::vector<std::string> platforms;
+    platforms.emplace_back("x64");
+    platforms.emplace_back("Win32");
+    platforms.emplace_back("ARM");
+    platforms.emplace_back("ARM64");
+    return platforms;
+  }
+
+  std::string GetDefaultPlatformName() const override { return "Win32"; }
 };
 
 cmGlobalGeneratorFactory*
@@ -178,13 +228,35 @@ public:
                   "Use -A option to specify architecture.";
   }
 
-  virtual void GetGenerators(std::vector<std::string>& names) const
+  std::vector<std::string> GetGeneratorNames() const override
   {
+    std::vector<std::string> names;
     names.push_back(vs16generatorName);
+    return names;
+  }
+
+  std::vector<std::string> GetGeneratorNamesWithPlatform() const override
+  {
+    return std::vector<std::string>();
   }
 
   bool SupportsToolset() const override { return true; }
   bool SupportsPlatform() const override { return true; }
+
+  std::vector<std::string> GetKnownPlatforms() const override
+  {
+    std::vector<std::string> platforms;
+    platforms.emplace_back("x64");
+    platforms.emplace_back("Win32");
+    platforms.emplace_back("ARM");
+    platforms.emplace_back("ARM64");
+    return platforms;
+  }
+
+  std::string GetDefaultPlatformName() const override
+  {
+    return VSHostPlatformName();
+  }
 };
 
 cmGlobalGeneratorFactory*
@@ -206,16 +278,8 @@ cmGlobalVisualStudioVersionedGenerator::cmGlobalVisualStudioVersionedGenerator(
   this->DefaultCSharpFlagTableName = VSVersionToToolset(this->Version);
   this->DefaultLinkFlagTableName = VSVersionToToolset(this->Version);
   if (this->Version >= cmGlobalVisualStudioGenerator::VS16) {
-#ifdef HOST_PLATFORM_NAME
-    this->DefaultPlatformName = HOST_PLATFORM_NAME;
-#else
-    cmsys::SystemInformation info;
-    if (info.Is64Bits()) {
-      this->DefaultPlatformName = "x64";
-    } else {
-      this->DefaultPlatformName = "Win32";
-    }
-#endif
+    this->DefaultPlatformName = VSHostPlatformName();
+    this->DefaultPlatformToolsetHostArchitecture = VSHostArchitecture();
   }
 }
 
@@ -407,6 +471,18 @@ std::string cmGlobalVisualStudioVersionedGenerator::FindMSBuildCommand()
   // Ask Visual Studio Installer tool.
   std::string vs;
   if (vsSetupAPIHelper.GetVSInstanceInfo(vs)) {
+    std::string const& hostArch =
+      this->GetPlatformToolsetHostArchitectureString();
+    if (hostArch == "x64") {
+      msbuild = vs + "/MSBuild/Current/Bin/amd64/MSBuild.exe";
+      if (cmSystemTools::FileExists(msbuild)) {
+        return msbuild;
+      }
+      msbuild = vs + "/MSBuild/15.0/Bin/amd64/MSBuild.exe";
+      if (cmSystemTools::FileExists(msbuild)) {
+        return msbuild;
+      }
+    }
     msbuild = vs + "/MSBuild/Current/Bin/MSBuild.exe";
     if (cmSystemTools::FileExists(msbuild)) {
       return msbuild;

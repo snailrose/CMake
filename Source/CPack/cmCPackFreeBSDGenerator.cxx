@@ -17,6 +17,7 @@
 #include <pkg.h>
 
 #include <algorithm>
+#include <utility>
 
 cmCPackFreeBSDGenerator::cmCPackFreeBSDGenerator()
   : cmCPackArchiveGenerator(cmArchiveWrite::CompressXZ, "paxr")
@@ -30,9 +31,7 @@ int cmCPackFreeBSDGenerator::InitializeInternal()
   return this->Superclass::InitializeInternal();
 }
 
-cmCPackFreeBSDGenerator::~cmCPackFreeBSDGenerator()
-{
-}
+cmCPackFreeBSDGenerator::~cmCPackFreeBSDGenerator() = default;
 
 // This is a wrapper, for use only in stream-based output,
 // that will output a string in UCL escaped fashion (in particular,
@@ -97,12 +96,12 @@ class ManifestKey
 public:
   std::string key;
 
-  ManifestKey(const std::string& k)
-    : key(k)
+  ManifestKey(std::string k)
+    : key(std::move(k))
   {
   }
 
-  virtual ~ManifestKey() {}
+  virtual ~ManifestKey() = default;
 
   // Output the value associated with this key to the stream @p s.
   // Format is to be decided by subclasses.
@@ -115,9 +114,9 @@ class ManifestKeyValue : public ManifestKey
 public:
   std::string value;
 
-  ManifestKeyValue(const std::string& k, const std::string& v)
+  ManifestKeyValue(const std::string& k, std::string v)
     : ManifestKey(k)
-    , value(v)
+    , value(std::move(v))
   {
   }
 

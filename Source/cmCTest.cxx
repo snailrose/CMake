@@ -640,7 +640,7 @@ bool cmCTest::InitializeFromCommand(cmCTestStartCommand* command)
                        "   Reading ctest configuration file: " << fname
                                                                << std::endl,
                        command->ShouldBeQuiet());
-    bool readit = mf->ReadDependentFile(fname.c_str());
+    bool readit = mf->ReadDependentFile(fname);
     if (!readit) {
       std::string m = "Could not find include file: ";
       m += fname;
@@ -1176,12 +1176,12 @@ int cmCTest::RunTest(std::vector<const char*> argv, std::string* output,
         if (strcmp(i, "--build-generator") == 0 &&
             timeout != cmCTest::MaxDuration() &&
             timeout > cmDuration::zero()) {
-          args.push_back("--test-timeout");
+          args.emplace_back("--test-timeout");
           std::ostringstream msg;
           msg << cmDurationTo<unsigned int>(timeout);
           args.push_back(msg.str());
         }
-        args.push_back(i);
+        args.emplace_back(i);
       }
     }
     if (log) {
@@ -1944,6 +1944,9 @@ bool cmCTest::HandleCommandLineArguments(size_t& i,
       this->Quiet = true;
       this->OutputAsJson = true;
       this->OutputAsJsonVersion = 1;
+    } else if (format != "human") {
+      errormsg = "'--show-only=' given unknown value '" + format + "'";
+      return false;
     }
   }
 
@@ -2170,7 +2173,7 @@ int cmCTest::Run(std::vector<std::string>& args, std::string* output)
     // handle the simple commandline arguments
     std::string errormsg;
     if (!this->HandleCommandLineArguments(i, args, errormsg)) {
-      cmSystemTools::Error(errormsg.c_str());
+      cmSystemTools::Error(errormsg);
       return 1;
     }
 
@@ -2469,8 +2472,7 @@ int cmCTest::ReadCustomConfigurationFileTree(const char* dir, cmMakefile* mf)
     bool erroroc = cmSystemTools::GetErrorOccuredFlag();
     cmSystemTools::ResetErrorOccuredFlag();
 
-    if (!mf->ReadListFile(fname.c_str()) ||
-        cmSystemTools::GetErrorOccuredFlag()) {
+    if (!mf->ReadListFile(fname) || cmSystemTools::GetErrorOccuredFlag()) {
       cmCTestLog(this, ERROR_MESSAGE,
                  "Problem reading custom configuration: " << fname
                                                           << std::endl);
@@ -2489,15 +2491,13 @@ int cmCTest::ReadCustomConfigurationFileTree(const char* dir, cmMakefile* mf)
     gl.RecurseOn();
     gl.FindFiles(rexpr);
     std::vector<std::string>& files = gl.GetFiles();
-    std::vector<std::string>::iterator fileIt;
-    for (fileIt = files.begin(); fileIt != files.end(); ++fileIt) {
+    for (const std::string& file : files) {
       cmCTestLog(this, DEBUG,
-                 "* Read custom CTest configuration file: " << *fileIt
+                 "* Read custom CTest configuration file: " << file
                                                             << std::endl);
-      if (!mf->ReadListFile(fileIt->c_str()) ||
-          cmSystemTools::GetErrorOccuredFlag()) {
+      if (!mf->ReadListFile(file) || cmSystemTools::GetErrorOccuredFlag()) {
         cmCTestLog(this, ERROR_MESSAGE,
-                   "Problem reading custom configuration: " << *fileIt
+                   "Problem reading custom configuration: " << file
                                                             << std::endl);
       }
     }
@@ -2626,6 +2626,32 @@ void cmCTest::SetCTestConfiguration(const char* name, const char* value,
   this->CTestConfiguration[name] = value;
 }
 
+std::string cmCTest::GetSubmitURL()
+{
+  std::string url = this->GetCTestConfiguration("SubmitURL");
+  if (url.empty()) {
+    std::string method = this->GetCTestConfiguration("DropMethod");
+    std::string user = this->GetCTestConfiguration("DropSiteUser");
+    std::string password = this->GetCTestConfiguration("DropSitePassword");
+    std::string site = this->GetCTestConfiguration("DropSite");
+    std::string location = this->GetCTestConfiguration("DropLocation");
+
+    url = method.empty() ? "http" : method;
+    url += "://";
+    if (!user.empty()) {
+      url += user;
+      if (!password.empty()) {
+        url += ':';
+        url += password;
+      }
+      url += '@';
+    }
+    url += site;
+    url += location;
+  }
+  return url;
+}
+
 std::string cmCTest::GetCurrentTag()
 {
   return this->CurrentTag;
@@ -2690,7 +2716,7 @@ void cmCTest::SetSpecificTrack(const char* track)
 
 void cmCTest::AddSubmitFile(Part part, const char* name)
 {
-  this->Parts[part].SubmitFiles.push_back(name);
+  this->Parts[part].SubmitFiles.emplace_back(name);
 }
 
 void cmCTest::AddCTestConfigurationOverwrite(const std::string& overStr)
@@ -2781,13 +2807,13 @@ bool cmCTest::RunCommand(std::vector<std::string> const& args,
     if ((res == cmsysProcess_Pipe_STDOUT || res == cmsysProcess_Pipe_STDERR) &&
         this->ExtraVerbose) {
       processOutput.DecodeText(data, length, strdata);
-      cmSystemTools::Stdout(strdata.c_str(), strdata.size());
+      cmSystemTools::Stdout(strdata);
     }
   }
   if (this->ExtraVerbose) {
     processOutput.DecodeText(std::string(), strdata);
     if (!strdata.empty()) {
-      cmSystemTools::Stdout(strdata.c_str(), strdata.size());
+      cmSystemTools::Stdout(strdata);
     }
   }
 

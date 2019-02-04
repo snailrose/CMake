@@ -173,8 +173,28 @@ void cmNinjaTargetGenerator::AddIncludeFlags(std::string& languageFlags,
 
 bool cmNinjaTargetGenerator::NeedDepTypeMSVC(const std::string& lang) const
 {
-  return (this->GetMakefile()->GetSafeDefinition("CMAKE_NINJA_DEPTYPE_" +
-                                                 lang) == "msvc");
+  std::string const& deptype =
+    this->GetMakefile()->GetSafeDefinition("CMAKE_NINJA_DEPTYPE_" + lang);
+  if (deptype == "msvc") {
+    return true;
+  }
+  if (deptype == "intel") {
+    // Ninja does not really define "intel", but we use it to switch based
+    // on whether this environment supports "gcc" or "msvc" deptype.
+    if (!this->GetGlobalGenerator()->SupportsMultilineDepfile()) {
+      // This ninja version is too old to support the Intel depfile format.
+      // Fall back to msvc deptype.
+      return true;
+    }
+    if ((this->Makefile->GetHomeDirectory().find(' ') != std::string::npos) ||
+        (this->Makefile->GetHomeOutputDirectory().find(' ') !=
+         std::string::npos)) {
+      // The Intel compiler does not properly escape spaces in a depfile.
+      // Fall back to msvc deptype.
+      return true;
+    }
+  }
+  return false;
 }
 
 // TODO: Refactor with
@@ -433,6 +453,7 @@ void cmNinjaTargetGenerator::WriteCompileRule(const std::string& lang)
   vars.ObjectFileDir = "$OBJECT_FILE_DIR";
   if (lang == "Swift") {
     vars.SwiftAuxiliarySources = "$SWIFT_AUXILIARY_SOURCES";
+    vars.SwiftModuleName = "$SWIFT_MODULE_NAME";
   }
 
   // For some cases we do an explicit preprocessor invocation.
@@ -629,10 +650,6 @@ void cmNinjaTargetGenerator::WriteCompileRule(const std::string& lang)
     }
   } else {
     deptype = "gcc";
-    const char* langdeptype = mf->GetDefinition("CMAKE_NINJA_DEPTYPE_" + lang);
-    if (langdeptype) {
-      deptype = langdeptype;
-    }
     depfile = "$DEP_FILE";
     const std::string flagsName = "CMAKE_DEPFILE_FLAGS_" + lang;
     std::string depfileFlags = mf->GetSafeDefinition(flagsName);
@@ -904,9 +921,9 @@ void cmNinjaTargetGenerator::WriteObjectBuildStatement(
   vars["FLAGS"] = this->ComputeFlagsForObject(source, language);
   vars["DEFINES"] = this->ComputeDefines(source, language);
   vars["INCLUDES"] = this->ComputeIncludes(source, language);
-  // The swift compiler needs all the sources besides the one being compiled in
-  // order to do the type checking.  List all these "auxiliary" sources.
   if (language == "Swift") {
+    // The swift compiler needs all the sources besides the one being compiled
+    // in order to do the type checking.  List all these "auxiliary" sources.
     std::string aux_sources;
     cmGeneratorTarget::KindedSources const& sources =
       this->GeneratorTarget->GetKindedSources(this->GetConfigName());
@@ -917,6 +934,13 @@ void cmNinjaTargetGenerator::WriteObjectBuildStatement(
       aux_sources += " " + this->GetSourceFilePath(src.Source.Value);
     }
     vars["SWIFT_AUXILIARY_SOURCES"] = aux_sources;
+
+    if (const char* name =
+          this->GeneratorTarget->GetProperty("SWIFT_MODULE_NAME")) {
+      vars["SWIFT_MODULE_NAME"] = name;
+    } else {
+      vars["SWIFT_MODULE_NAME"] = this->GeneratorTarget->GetName();
+    }
   }
 
   if (!this->NeedDepTypeMSVC(language)) {

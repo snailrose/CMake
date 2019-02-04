@@ -67,7 +67,7 @@ bool cmIncludeCommand::InitialPass(std::vector<std::string> const& args,
     // Not a path. Maybe module.
     std::string module = fname;
     module += ".cmake";
-    std::string mfile = this->Makefile->GetModulesFile(module.c_str());
+    std::string mfile = this->Makefile->GetModulesFile(module);
     if (!mfile.empty()) {
       fname = mfile;
     }
@@ -120,8 +120,7 @@ bool cmIncludeCommand::InitialPass(std::vector<std::string> const& args,
     return true;
   }
 
-  bool readit =
-    this->Makefile->ReadDependentFile(listFile.c_str(), noPolicyScope);
+  bool readit = this->Makefile->ReadDependentFile(listFile, noPolicyScope);
 
   // add the location of the included file if a result variable was given
   if (!resultVarName.empty()) {

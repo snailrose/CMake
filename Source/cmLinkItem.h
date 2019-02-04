@@ -24,8 +24,8 @@ class cmLinkItem
 
 public:
   cmLinkItem();
-  cmLinkItem(std::string const& s, cmListFileBacktrace const& bt);
-  cmLinkItem(cmGeneratorTarget const* t, cmListFileBacktrace const& bt);
+  cmLinkItem(std::string s, cmListFileBacktrace bt);
+  cmLinkItem(cmGeneratorTarget const* t, cmListFileBacktrace bt);
   std::string const& AsStr() const;
   cmGeneratorTarget const* Target = nullptr;
   cmListFileBacktrace Backtrace;
@@ -77,13 +77,10 @@ struct cmLinkInterface : public cmLinkInterfaceLibraries
   std::vector<cmLinkItem> WrongConfigLibraries;
 
   bool ImplementationIsInterface = false;
-
-  cmLinkInterface() {}
 };
 
 struct cmOptionalLinkInterface : public cmLinkInterface
 {
-  cmOptionalLinkInterface() {}
   bool LibrariesDone = false;
   bool AllDone = false;
   bool Exists = false;
@@ -105,7 +102,6 @@ struct cmLinkImplementation : public cmLinkImplementationLibraries
 // Cache link implementation computation from each configuration.
 struct cmOptionalLinkImplementation : public cmLinkImplementation
 {
-  cmOptionalLinkImplementation() {}
   bool LibrariesDone = false;
   bool LanguagesDone = false;
   bool HadHeadSensitiveCondition = false;

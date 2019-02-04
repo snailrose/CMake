@@ -19,7 +19,6 @@
 #include "cmMakefile.h"
 #include "cmMessageType.h"
 #include "cmMessenger.h"
-#include "cmOutputConverter.h"
 #include "cmProperty.h"
 #include "cmSourceFile.h"
 #include "cmSourceFileLocation.h"
@@ -662,7 +661,7 @@ public:
   }
 };
 
-cmSourceFile* cmTarget::AddSource(const std::string& src)
+cmSourceFile* cmTarget::AddSource(const std::string& src, bool before)
 {
   cmSourceFileLocation sfl(this->Makefile, src,
                            cmSourceFileLocationKind::Known);
@@ -671,8 +670,14 @@ cmSourceFile* cmTarget::AddSource(const std::string& src)
                    TargetPropertyEntryFinder(sfl)) ==
       this->Internal->SourceEntries.end()) {
     cmListFileBacktrace lfbt = this->Makefile->GetBacktrace();
-    this->Internal->SourceEntries.push_back(src);
-    this->Internal->SourceBacktraces.push_back(lfbt);
+    this->Internal->SourceEntries.insert(
+      before ? this->Internal->SourceEntries.begin()
+             : this->Internal->SourceEntries.end(),
+      src);
+    this->Internal->SourceBacktraces.insert(
+      before ? this->Internal->SourceBacktraces.begin()
+             : this->Internal->SourceBacktraces.end(),
+      lfbt);
   }
   if (cmGeneratorExpression::Find(src) != std::string::npos) {
     return nullptr;
@@ -731,7 +736,7 @@ bool cmTarget::PushTLLCommandTrace(TLLSignature signature,
     }
   }
   if (this->TLLCommands.empty() || this->TLLCommands.back().second != lfc) {
-    this->TLLCommands.push_back(std::make_pair(signature, lfc));
+    this->TLLCommands.emplace_back(signature, lfc);
   }
   return ret;
 }
@@ -741,11 +746,12 @@ void cmTarget::GetTllSignatureTraces(std::ostream& s, TLLSignature sig) const
   const char* sigString =
     (sig == cmTarget::KeywordTLLSignature ? "keyword" : "plain");
   s << "The uses of the " << sigString << " signature are here:\n";
-  cmOutputConverter converter(this->GetMakefile()->GetStateSnapshot());
+  cmStateDirectory cmDir =
+    this->GetMakefile()->GetStateSnapshot().GetDirectory();
   for (auto const& cmd : this->TLLCommands) {
     if (cmd.first == sig) {
       cmListFileContext lfc = cmd.second;
-      lfc.FilePath = converter.ConvertToRelativePath(
+      lfc.FilePath = cmDir.ConvertToRelPathIfNotContained(
         this->Makefile->GetState()->GetSourceDirectory(), lfc.FilePath);
       s << " * " << lfc << std::endl;
     }
@@ -975,7 +981,7 @@ void cmTarget::SetProperty(const std::string& prop, const char* value)
     this->Internal->IncludeDirectoriesEntries.clear();
     this->Internal->IncludeDirectoriesBacktraces.clear();
     if (value) {
-      this->Internal->IncludeDirectoriesEntries.push_back(value);
+      this->Internal->IncludeDirectoriesEntries.emplace_back(value);
       cmListFileBacktrace lfbt = this->Makefile->GetBacktrace();
       this->Internal->IncludeDirectoriesBacktraces.push_back(lfbt);
     }
@@ -983,7 +989,7 @@ void cmTarget::SetProperty(const std::string& prop, const char* value)
     this->Internal->CompileOptionsEntries.clear();
     this->Internal->CompileOptionsBacktraces.clear();
     if (value) {
-      this->Internal->CompileOptionsEntries.push_back(value);
+      this->Internal->CompileOptionsEntries.emplace_back(value);
       cmListFileBacktrace lfbt = this->Makefile->GetBacktrace();
       this->Internal->CompileOptionsBacktraces.push_back(lfbt);
     }
@@ -991,7 +997,7 @@ void cmTarget::SetProperty(const std::string& prop, const char* value)
     this->Internal->CompileFeaturesEntries.clear();
     this->Internal->CompileFeaturesBacktraces.clear();
     if (value) {
-      this->Internal->CompileFeaturesEntries.push_back(value);
+      this->Internal->CompileFeaturesEntries.emplace_back(value);
       cmListFileBacktrace lfbt = this->Makefile->GetBacktrace();
       this->Internal->CompileFeaturesBacktraces.push_back(lfbt);
     }
@@ -999,7 +1005,7 @@ void cmTarget::SetProperty(const std::string& prop, const char* value)
     this->Internal->CompileDefinitionsEntries.clear();
     this->Internal->CompileDefinitionsBacktraces.clear();
     if (value) {
-      this->Internal->CompileDefinitionsEntries.push_back(value);
+      this->Internal->CompileDefinitionsEntries.emplace_back(value);
       cmListFileBacktrace lfbt = this->Makefile->GetBacktrace();
       this->Internal->CompileDefinitionsBacktraces.push_back(lfbt);
     }
@@ -1007,7 +1013,7 @@ void cmTarget::SetProperty(const std::string& prop, const char* value)
     this->Internal->LinkOptionsEntries.clear();
     this->Internal->LinkOptionsBacktraces.clear();
     if (value) {
-      this->Internal->LinkOptionsEntries.push_back(value);
+      this->Internal->LinkOptionsEntries.emplace_back(value);
       cmListFileBacktrace lfbt = this->Makefile->GetBacktrace();
       this->Internal->LinkOptionsBacktraces.push_back(lfbt);
     }
@@ -1015,7 +1021,7 @@ void cmTarget::SetProperty(const std::string& prop, const char* value)
     this->Internal->LinkDirectoriesEntries.clear();
     this->Internal->LinkDirectoriesBacktraces.clear();
     if (value) {
-      this->Internal->LinkDirectoriesEntries.push_back(value);
+      this->Internal->LinkDirectoriesEntries.emplace_back(value);
       cmListFileBacktrace lfbt = this->Makefile->GetBacktrace();
       this->Internal->LinkDirectoriesBacktraces.push_back(lfbt);
     }
@@ -1024,7 +1030,7 @@ void cmTarget::SetProperty(const std::string& prop, const char* value)
     this->Internal->LinkImplementationPropertyBacktraces.clear();
     if (value) {
       cmListFileBacktrace lfbt = this->Makefile->GetBacktrace();
-      this->Internal->LinkImplementationPropertyEntries.push_back(value);
+      this->Internal->LinkImplementationPropertyEntries.emplace_back(value);
       this->Internal->LinkImplementationPropertyBacktraces.push_back(lfbt);
     }
   } else if (prop == propSOURCES) {
@@ -1032,7 +1038,7 @@ void cmTarget::SetProperty(const std::string& prop, const char* value)
     this->Internal->SourceBacktraces.clear();
     if (value) {
       cmListFileBacktrace lfbt = this->Makefile->GetBacktrace();
-      this->Internal->SourceEntries.push_back(value);
+      this->Internal->SourceEntries.emplace_back(value);
       this->Internal->SourceBacktraces.push_back(lfbt);
     }
   } else if (prop == propIMPORTED_GLOBAL) {
@@ -1102,49 +1108,49 @@ void cmTarget::AppendProperty(const std::string& prop, const char* value,
   }
   if (prop == "INCLUDE_DIRECTORIES") {
     if (value && *value) {
-      this->Internal->IncludeDirectoriesEntries.push_back(value);
+      this->Internal->IncludeDirectoriesEntries.emplace_back(value);
       cmListFileBacktrace lfbt = this->Makefile->GetBacktrace();
       this->Internal->IncludeDirectoriesBacktraces.push_back(lfbt);
     }
   } else if (prop == "COMPILE_OPTIONS") {
     if (value && *value) {
-      this->Internal->CompileOptionsEntries.push_back(value);
+      this->Internal->CompileOptionsEntries.emplace_back(value);
       cmListFileBacktrace lfbt = this->Makefile->GetBacktrace();
       this->Internal->CompileOptionsBacktraces.push_back(lfbt);
     }
   } else if (prop == "COMPILE_FEATURES") {
     if (value && *value) {
-      this->Internal->CompileFeaturesEntries.push_back(value);
+      this->Internal->CompileFeaturesEntries.emplace_back(value);
       cmListFileBacktrace lfbt = this->Makefile->GetBacktrace();
       this->Internal->CompileFeaturesBacktraces.push_back(lfbt);
     }
   } else if (prop == "COMPILE_DEFINITIONS") {
     if (value && *value) {
-      this->Internal->CompileDefinitionsEntries.push_back(value);
+      this->Internal->CompileDefinitionsEntries.emplace_back(value);
       cmListFileBacktrace lfbt = this->Makefile->GetBacktrace();
       this->Internal->CompileDefinitionsBacktraces.push_back(lfbt);
     }
   } else if (prop == "LINK_OPTIONS") {
     if (value && *value) {
-      this->Internal->LinkOptionsEntries.push_back(value);
+      this->Internal->LinkOptionsEntries.emplace_back(value);
       cmListFileBacktrace lfbt = this->Makefile->GetBacktrace();
       this->Internal->LinkOptionsBacktraces.push_back(lfbt);
     }
   } else if (prop == "LINK_DIRECTORIES") {
     if (value && *value) {
-      this->Internal->LinkDirectoriesEntries.push_back(value);
+      this->Internal->LinkDirectoriesEntries.emplace_back(value);
       cmListFileBacktrace lfbt = this->Makefile->GetBacktrace();
       this->Internal->LinkDirectoriesBacktraces.push_back(lfbt);
     }
   } else if (prop == "LINK_LIBRARIES") {
     if (value && *value) {
       cmListFileBacktrace lfbt = this->Makefile->GetBacktrace();
-      this->Internal->LinkImplementationPropertyEntries.push_back(value);
+      this->Internal->LinkImplementationPropertyEntries.emplace_back(value);
       this->Internal->LinkImplementationPropertyBacktraces.push_back(lfbt);
     }
   } else if (prop == "SOURCES") {
     cmListFileBacktrace lfbt = this->Makefile->GetBacktrace();
-    this->Internal->SourceEntries.push_back(value);
+    this->Internal->SourceEntries.emplace_back(value);
     this->Internal->SourceBacktraces.push_back(lfbt);
   } else if (cmHasLiteralPrefix(prop, "IMPORTED_LIBNAME")) {
     this->Makefile->IssueMessage(MessageType::FATAL_ERROR,

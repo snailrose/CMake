@@ -61,7 +61,8 @@ protected:
   void allocate(void* data = nullptr);
 
 public:
-  CM_DISABLE_COPY(uv_handle_ptr_base_)
+  uv_handle_ptr_base_(uv_handle_ptr_base_ const&) = delete;
+  uv_handle_ptr_base_& operator=(uv_handle_ptr_base_ const&) = delete;
   uv_handle_ptr_base_(uv_handle_ptr_base_&&) noexcept;
   uv_handle_ptr_base_& operator=(uv_handle_ptr_base_&&) noexcept;
 
@@ -86,8 +87,8 @@ public:
   }
 
   // Dtor and ctor need to be inline defined like this for default ctors and
-  // dtors to work.
-  uv_handle_ptr_base_() {}
+  // dtors to work.  Some compilers do not like '= default' here.
+  uv_handle_ptr_base_() {} // NOLINT(modernize-use-equals-default)
   uv_handle_ptr_base_(std::nullptr_t) {}
   ~uv_handle_ptr_base_() { reset(); }
 

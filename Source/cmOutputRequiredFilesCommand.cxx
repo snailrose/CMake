@@ -28,7 +28,7 @@ public:
    * Construct with dependency generation marked not done; instance
    * not placed in cmMakefile's list.
    */
-  cmDependInformation() {}
+  cmDependInformation() = default;
 
   /**
    * The set of files on which this one depends.
@@ -194,7 +194,7 @@ protected:
             message += includeFile;
             message += " for file ";
             message += info->FullPath;
-            cmSystemTools::Error(message.c_str(), nullptr);
+            cmSystemTools::Error(message);
           }
           continue;
         }

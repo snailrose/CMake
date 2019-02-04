@@ -400,7 +400,7 @@ int cmCoreTryCompile::TryCompileCode(std::vector<std::string> const& argv,
   // compute the binary dir when TRY_COMPILE is called with a src file
   // signature
   if (this->SrcFileSignature) {
-    this->BinaryDirectory += cmake::GetCMakeFilesDirectory();
+    this->BinaryDirectory += "/CMakeFiles";
     this->BinaryDirectory += "/CMakeTmp";
   } else {
     // only valid for srcfile signatures
@@ -599,7 +599,9 @@ int cmCoreTryCompile::TryCompileCode(std::vector<std::string> const& argv,
     fprintf(fout, "link_directories(${LINK_DIRECTORIES})\n");
     // handle any compile flags we need to pass on
     if (!compileDefs.empty()) {
-      fprintf(fout, "add_definitions(%s)\n", cmJoin(compileDefs, " ").c_str());
+      // Pass using bracket arguments to preserve content.
+      fprintf(fout, "add_definitions([==[%s]==])\n",
+              cmJoin(compileDefs, "]==] [==[").c_str());
     }
 
     /* Use a random file name to avoid rapid creation and deletion
@@ -1021,12 +1023,12 @@ void cmCoreTryCompile::FindOutputFile(const std::string& targetName,
     tmp += config;
     searchDirs.push_back(std::move(tmp));
   }
-  searchDirs.push_back("/Debug");
+  searchDirs.emplace_back("/Debug");
 #if defined(__APPLE__)
   std::string app = "/Debug/" + targetName + ".app";
   searchDirs.push_back(std::move(app));
 #endif
-  searchDirs.push_back("/Development");
+  searchDirs.emplace_back("/Development");
 
   for (std::string const& sdir : searchDirs) {
     std::string command = this->BinaryDirectory;

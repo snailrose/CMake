@@ -95,6 +95,7 @@ cmFindPackageCommand::cmFindPackageCommand()
   this->UseLib32Paths = false;
   this->UseLib64Paths = false;
   this->UseLibx32Paths = false;
+  this->UseRealPath = false;
   this->PolicyScope = true;
   this->VersionMajor = 0;
   this->VersionMinor = 0;
@@ -193,6 +194,11 @@ bool cmFindPackageCommand::InitialPass(std::vector<std::string> const& args,
   // Check if System Package Registry should be disabled
   if (this->Makefile->IsOn("CMAKE_FIND_PACKAGE_NO_SYSTEM_PACKAGE_REGISTRY")) {
     this->NoSystemRegistry = true;
+  }
+
+  // Check whether we should resolve symlinks when finding packages
+  if (this->Makefile->IsOn("CMAKE_FIND_PACKAGE_RESOLVE_SYMLINKS")) {
+    this->UseRealPath = true;
   }
 
   // Check if Sorting should be enabled
@@ -657,7 +663,7 @@ bool cmFindPackageCommand::FindModule(bool& found)
   module += this->Name;
   module += ".cmake";
   bool system = false;
-  std::string mfile = this->Makefile->GetModulesFile(module.c_str(), system);
+  std::string mfile = this->Makefile->GetModulesFile(module, system);
   if (!mfile.empty()) {
     if (system) {
       auto it = this->DeprecatedFindModules.find(this->Name);
@@ -687,7 +693,7 @@ bool cmFindPackageCommand::FindModule(bool& found)
     std::string var = this->Name;
     var += "_FIND_MODULE";
     this->Makefile->AddDefinition(var, "1");
-    bool result = this->ReadListFile(mfile.c_str(), DoPolicyScope);
+    bool result = this->ReadListFile(mfile, DoPolicyScope);
     this->Makefile->RemoveDefinition(var);
     return result;
   }
@@ -770,7 +776,7 @@ bool cmFindPackageCommand::HandlePackageMode()
     this->StoreVersionFound();
 
     // Parse the configuration file.
-    if (this->ReadListFile(this->FileFound.c_str(), DoPolicyScope)) {
+    if (this->ReadListFile(this->FileFound, DoPolicyScope)) {
       // The package has been found.
       found = true;
 
@@ -1030,7 +1036,8 @@ bool cmFindPackageCommand::FindAppBundleConfig()
   return false;
 }
 
-bool cmFindPackageCommand::ReadListFile(const char* f, PolicyScopeRule psr)
+bool cmFindPackageCommand::ReadListFile(const std::string& f,
+                                        PolicyScopeRule psr)
 {
   const bool noPolicyScope = !this->PolicyScope || psr == NoPolicyScope;
   if (this->Makefile->ReadDependentFile(f, noPolicyScope)) {
@@ -1502,6 +1509,10 @@ bool cmFindPackageCommand::FindConfigFile(std::string const& dir,
       fprintf(stderr, "Checking file [%s]\n", file.c_str());
     }
     if (cmSystemTools::FileExists(file, true) && this->CheckVersion(file)) {
+      // Allow resolving symlinks when the config file is found through a link
+      if (this->UseRealPath) {
+        file = cmSystemTools::GetRealPath(file);
+      }
       return true;
     }
   }
@@ -1580,7 +1591,7 @@ bool cmFindPackageCommand::CheckVersionFile(std::string const& version_file,
   // Load the version check file.  Pass NoPolicyScope because we do
   // our own policy push/pop independent of CMP0011.
   bool suitable = false;
-  if (this->ReadListFile(version_file.c_str(), NoPolicyScope)) {
+  if (this->ReadListFile(version_file, NoPolicyScope)) {
     // Check the output variables.
     bool okay = this->Makefile->IsOn("PACKAGE_VERSION_EXACT");
     bool unsuitable = this->Makefile->IsOn("PACKAGE_VERSION_UNSUITABLE");
@@ -1661,7 +1672,7 @@ void cmFindPackageCommand::StoreVersionFound()
 class cmFileListGeneratorBase
 {
 public:
-  virtual ~cmFileListGeneratorBase() {}
+  virtual ~cmFileListGeneratorBase() = default;
 
 protected:
   bool Consider(std::string const& fullPath, cmFileList& listing);
@@ -1678,8 +1689,7 @@ private:
 class cmFileList
 {
 public:
-  cmFileList() {}
-  virtual ~cmFileList() {}
+  virtual ~cmFileList() = default;
   cmFileList& operator/(cmFileListGeneratorBase const& rhs)
   {
     if (this->Last) {
@@ -1750,8 +1760,8 @@ bool cmFileListGeneratorBase::Consider(std::string const& fullPath,
 class cmFileListGeneratorFixed : public cmFileListGeneratorBase
 {
 public:
-  cmFileListGeneratorFixed(std::string const& str)
-    : String(str)
+  cmFileListGeneratorFixed(std::string str)
+    : String(std::move(str))
   {
   }
   cmFileListGeneratorFixed(cmFileListGeneratorFixed const& r)
@@ -1848,7 +1858,7 @@ private:
       }
       for (std::string const& n : this->Names) {
         if (cmsysString_strncasecmp(fname, n.c_str(), n.length()) == 0) {
-          matches.push_back(fname);
+          matches.emplace_back(fname);
         }
       }
     }
@@ -1907,7 +1917,7 @@ private:
       for (std::string name : this->Names) {
         name += this->Extension;
         if (cmsysString_strcasecmp(fname, name.c_str()) == 0) {
-          matches.push_back(fname);
+          matches.emplace_back(fname);
         }
       }
     }
@@ -1930,8 +1940,8 @@ private:
 class cmFileListGeneratorCaseInsensitive : public cmFileListGeneratorBase
 {
 public:
-  cmFileListGeneratorCaseInsensitive(std::string const& str)
-    : String(str)
+  cmFileListGeneratorCaseInsensitive(std::string str)
+    : String(std::move(str))
   {
   }
   cmFileListGeneratorCaseInsensitive(
@@ -1972,8 +1982,8 @@ private:
 class cmFileListGeneratorGlob : public cmFileListGeneratorBase
 {
 public:
-  cmFileListGeneratorGlob(std::string const& str)
-    : Pattern(str)
+  cmFileListGeneratorGlob(std::string str)
+    : Pattern(std::move(str))
   {
   }
   cmFileListGeneratorGlob(cmFileListGeneratorGlob const& r)
@@ -2070,16 +2080,16 @@ bool cmFindPackageCommand::SearchPrefix(std::string const& prefix_in)
     common.push_back("lib/" + this->LibraryArchitecture);
   }
   if (this->UseLib32Paths) {
-    common.push_back("lib32");
+    common.emplace_back("lib32");
   }
   if (this->UseLib64Paths) {
-    common.push_back("lib64");
+    common.emplace_back("lib64");
   }
   if (this->UseLibx32Paths) {
-    common.push_back("libx32");
+    common.emplace_back("libx32");
   }
-  common.push_back("lib");
-  common.push_back("share");
+  common.emplace_back("lib");
+  common.emplace_back("share");
 
   //  PREFIX/(lib/ARCH|lib*|share)/cmake/(Foo|foo|FOO).*/
   {

@@ -403,7 +403,7 @@ void cmMakefileTargetGenerator::WriteObjectRuleFiles(
     err << "Warning: Source file \"" << source.GetFullPath()
         << "\" is listed multiple times for target \""
         << this->GeneratorTarget->GetName() << "\".";
-    cmSystemTools::Message(err.str().c_str(), "Warning");
+    cmSystemTools::Message(err.str(), "Warning");
     return;
   }
 
@@ -435,8 +435,8 @@ void cmMakefileTargetGenerator::WriteObjectRuleFiles(
   objFullPath = cmSystemTools::CollapseFullPath(objFullPath);
   std::string srcFullPath =
     cmSystemTools::CollapseFullPath(source.GetFullPath());
-  this->LocalGenerator->AddImplicitDepends(
-    this->GeneratorTarget, lang, objFullPath.c_str(), srcFullPath.c_str());
+  this->LocalGenerator->AddImplicitDepends(this->GeneratorTarget, lang,
+                                           objFullPath, srcFullPath);
 }
 
 void cmMakefileTargetGenerator::WriteObjectBuildFile(
@@ -816,7 +816,7 @@ void cmMakefileTargetGenerator::WriteObjectBuildFile(
     lang_has_assembly && this->LocalGenerator->GetCreateAssemblySourceRules();
   if (do_preprocess_rules || do_assembly_rules) {
     std::vector<std::string> force_depends;
-    force_depends.push_back("cmake_force");
+    force_depends.emplace_back("cmake_force");
     std::string::size_type dot_pos = relativeObj.rfind('.');
     std::string relativeObjBase = relativeObj.substr(0, dot_pos);
     dot_pos = obj.rfind('.');
@@ -1213,8 +1213,7 @@ void cmMakefileTargetGenerator::GenerateCustomRuleFile(
     std::string objFullPath = cmSystemTools::CollapseFullPath(outputs[0]);
     std::string srcFullPath = cmSystemTools::CollapseFullPath(idi.second);
     this->LocalGenerator->AddImplicitDepends(this->GeneratorTarget, idi.first,
-                                             objFullPath.c_str(),
-                                             srcFullPath.c_str());
+                                             objFullPath, srcFullPath);
   }
 }
 
@@ -1222,7 +1221,7 @@ void cmMakefileTargetGenerator::MakeEchoProgress(
   cmLocalUnixMakefileGenerator3::EchoProgress& progress) const
 {
   progress.Dir = this->LocalGenerator->GetBinaryDirectory();
-  progress.Dir += cmake::GetCMakeFilesDirectory();
+  progress.Dir += "/CMakeFiles";
   std::ostringstream progressArg;
   progressArg << "$(CMAKE_PROGRESS_" << this->NumberOfProgressActions << ")";
   progress.Arg = progressArg.str();
@@ -1249,7 +1248,7 @@ void cmMakefileTargetGenerator::WriteObjectsVariable(
     *this->BuildFileStream << " " << lineContinue << "\n";
     *this->BuildFileStream
       << cmLocalUnixMakefileGenerator3::ConvertToQuotedOutputPath(
-           obj.c_str(), useWatcomQuote);
+           obj, useWatcomQuote);
   }
   *this->BuildFileStream << "\n";
 
@@ -1272,7 +1271,7 @@ void cmMakefileTargetGenerator::WriteObjectsVariable(
     *this->BuildFileStream << " " << lineContinue << "\n";
     *this->BuildFileStream
       << cmLocalUnixMakefileGenerator3::ConvertToQuotedOutputPath(
-           obj.c_str(), useWatcomQuote);
+           obj, useWatcomQuote);
   }
   *this->BuildFileStream << "\n"
                          << "\n";

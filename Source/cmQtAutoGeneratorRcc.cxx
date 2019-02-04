@@ -10,8 +10,6 @@
 #include "cmSystemTools.h"
 #include "cmUVHandlePtr.h"
 
-#include <functional>
-
 // -- Class methods
 
 cmQtAutoGeneratorRcc::cmQtAutoGeneratorRcc()
@@ -20,9 +18,7 @@ cmQtAutoGeneratorRcc::cmQtAutoGeneratorRcc()
   UVRequest().init(*UVLoop(), &cmQtAutoGeneratorRcc::UVPollStage, this);
 }
 
-cmQtAutoGeneratorRcc::~cmQtAutoGeneratorRcc()
-{
-}
+cmQtAutoGeneratorRcc::~cmQtAutoGeneratorRcc() = default;
 
 bool cmQtAutoGeneratorRcc::Init(cmMakefile* makefile)
 {
@@ -58,7 +54,7 @@ bool cmQtAutoGeneratorRcc::Init(cmMakefile* makefile)
   };
 
   // -- Read info file
-  if (!makefile->ReadListFile(InfoFile().c_str())) {
+  if (!makefile->ReadListFile(InfoFile())) {
     Log().ErrorFile(GeneratorT::RCC, InfoFile(), "File processing failed");
     return false;
   }
@@ -603,7 +599,7 @@ bool cmQtAutoGeneratorRcc::GenerateRcc()
     std::vector<std::string> cmd;
     cmd.push_back(RccExecutable_);
     cmd.insert(cmd.end(), Options_.begin(), Options_.end());
-    cmd.push_back("-o");
+    cmd.emplace_back("-o");
     cmd.push_back(RccFileOutput_);
     cmd.push_back(QrcFile_);
     // We're done here if the process fails to start
@@ -664,8 +660,7 @@ bool cmQtAutoGeneratorRcc::StartProcess(
   Process_ = cm::make_unique<ReadOnlyProcessT>();
   Process_->setup(&ProcessResult_, mergedOutput, command, workingDirectory);
   // Start process
-  if (!Process_->start(UVLoop(),
-                       std::bind(&cm::uv_async_ptr::send, &UVRequest()))) {
+  if (!Process_->start(UVLoop(), [this] { UVRequest().send(); })) {
     Log().ErrorFile(GeneratorT::RCC, QrcFile_, ProcessResult_.ErrorMessage);
     Error_ = true;
     // Clean up

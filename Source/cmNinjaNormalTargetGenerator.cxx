@@ -31,7 +31,6 @@
 #include "cmStateSnapshot.h"
 #include "cmStateTypes.h"
 #include "cmSystemTools.h"
-#include "cmake.h"
 
 class cmCustomCommand;
 
@@ -377,7 +376,7 @@ void cmNinjaNormalTargetGenerator::WriteLinkRule(bool useResponseFile)
     cmEraseIf(linkCmds, cmNinjaRemoveNoOpCommands());
 
     linkCmds.insert(linkCmds.begin(), "$PRE_LINK");
-    linkCmds.push_back("$POST_BUILD");
+    linkCmds.emplace_back("$POST_BUILD");
     std::string linkCmd =
       this->GetLocalGenerator()->BuildCommandLine(linkCmds);
 
@@ -405,7 +404,7 @@ void cmNinjaNormalTargetGenerator::WriteLinkRule(bool useResponseFile)
       std::vector<std::string> commandLines;
       commandLines.push_back(cmakeCommand +
                              " -E cmake_symlink_executable $in $out");
-      commandLines.push_back("$POST_BUILD");
+      commandLines.emplace_back("$POST_BUILD");
 
       this->GetGlobalGenerator()->AddRule(
         "CMAKE_SYMLINK_EXECUTABLE",
@@ -423,7 +422,7 @@ void cmNinjaNormalTargetGenerator::WriteLinkRule(bool useResponseFile)
       std::vector<std::string> commandLines;
       commandLines.push_back(cmakeCommand +
                              " -E cmake_symlink_library $in $SONAME $out");
-      commandLines.push_back("$POST_BUILD");
+      commandLines.emplace_back("$POST_BUILD");
 
       this->GetGlobalGenerator()->AddRule(
         "CMAKE_SYMLINK_LIBRARY",
@@ -718,8 +717,7 @@ void cmNinjaNormalTargetGenerator::WriteDeviceLinkStatement()
     globalGen.GetRuleCmdLength(this->LanguageLinkerDeviceRule());
 
   const std::string rspfile = this->ConvertToNinjaPath(
-    std::string(cmake::GetCMakeFilesDirectoryPostSlash()) +
-    genTarget.GetName() + ".rsp");
+    std::string("CMakeFiles/") + genTarget.GetName() + ".rsp");
 
   // Gather order-only dependencies.
   cmNinjaDeps orderOnlyDeps;
@@ -1004,8 +1002,7 @@ void cmNinjaNormalTargetGenerator::WriteLinkStatement()
   }
 
   const std::string rspfile = this->ConvertToNinjaPath(
-    std::string(cmake::GetCMakeFilesDirectoryPostSlash()) + gt.GetName() +
-    ".rsp");
+    std::string("CMakeFiles/") + gt.GetName() + ".rsp");
 
   // Gather order-only dependencies.
   cmNinjaDeps orderOnlyDeps;

@@ -110,7 +110,7 @@ private:
     NoPolicyScope,
     DoPolicyScope
   };
-  bool ReadListFile(const char* f, PolicyScopeRule psr);
+  bool ReadListFile(const std::string& f, PolicyScopeRule psr);
   void StoreVersionFound();
 
   void ComputePrefixes();
@@ -178,6 +178,7 @@ private:
   bool UseLib32Paths;
   bool UseLib64Paths;
   bool UseLibx32Paths;
+  bool UseRealPath;
   bool PolicyScope;
   std::string LibraryArchitecture;
   std::vector<std::string> Names;

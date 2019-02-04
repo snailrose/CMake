@@ -16,7 +16,7 @@ const char* cmInstallCommandArguments::PermissionsTable[] = {
 const std::string cmInstallCommandArguments::EmptyString;
 
 cmInstallCommandArguments::cmInstallCommandArguments(
-  const std::string& defaultComponent)
+  std::string defaultComponent)
   : Destination(&Parser, "DESTINATION", &ArgumentGroup)
   , Component(&Parser, "COMPONENT", &ArgumentGroup)
   , NamelinkComponent(&Parser, "NAMELINK_COMPONENT", &ArgumentGroup)
@@ -29,7 +29,7 @@ cmInstallCommandArguments::cmInstallCommandArguments(
   , NamelinkSkip(&Parser, "NAMELINK_SKIP", &ArgumentGroup)
   , Type(&Parser, "TYPE", &ArgumentGroup)
   , GenericArguments(nullptr)
-  , DefaultComponentName(defaultComponent)
+  , DefaultComponentName(std::move(defaultComponent))
 {
 }
 
@@ -206,9 +206,7 @@ bool cmInstallCommandArguments::CheckPermissions(
   return false;
 }
 
-cmInstallCommandIncludesArgument::cmInstallCommandIncludesArgument()
-{
-}
+cmInstallCommandIncludesArgument::cmInstallCommandIncludesArgument() = default;
 
 const std::vector<std::string>&
 cmInstallCommandIncludesArgument::GetIncludeDirs() const

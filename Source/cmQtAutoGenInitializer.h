@@ -26,9 +26,6 @@ public:
   class Qrc
   {
   public:
-    Qrc() {}
-
-  public:
     std::string LockFile;
     std::string QrcFile;
     std::string QrcName;
@@ -102,7 +99,8 @@ private:
   bool SetupWriteAutogenInfo();
   bool SetupWriteRccInfo();
 
-  void AddGeneratedSource(std::string const& filename, GeneratorT genType);
+  void AddGeneratedSource(std::string const& filename, GeneratorT genType,
+                          bool prepend = false);
 
   bool GetMocExecutable();
   bool GetUicExecutable();

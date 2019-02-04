@@ -454,6 +454,7 @@ cmGlobalNinjaGenerator::cmGlobalNinjaGenerator(cmake* cm)
   , NinjaSupportsConsolePool(false)
   , NinjaSupportsImplicitOuts(false)
   , NinjaSupportsManifestRestat(false)
+  , NinjaSupportsMultilineDepfile(false)
   , NinjaSupportsDyndeps(0)
 {
 #ifdef _WIN32
@@ -550,7 +551,7 @@ bool cmGlobalNinjaGenerator::FindMakeProgram(cmMakefile* mf)
     this->NinjaCommand = ninjaCommand;
     std::vector<std::string> command;
     command.push_back(this->NinjaCommand);
-    command.push_back("--version");
+    command.emplace_back("--version");
     std::string version;
     std::string error;
     if (!cmSystemTools::RunSingleCommand(command, &version, &error, nullptr,
@@ -581,6 +582,9 @@ void cmGlobalNinjaGenerator::CheckNinjaFeatures()
   this->NinjaSupportsManifestRestat = !cmSystemTools::VersionCompare(
     cmSystemTools::OP_LESS, this->NinjaVersion.c_str(),
     RequiredNinjaVersionForManifestRestat().c_str());
+  this->NinjaSupportsMultilineDepfile = !cmSystemTools::VersionCompare(
+    cmSystemTools::OP_LESS, this->NinjaVersion.c_str(),
+    RequiredNinjaVersionForMultilineDepfile().c_str());
   {
     // Our ninja branch adds ".dyndep-#" to its version number,
     // where '#' is a feature-specific version number.  Extract it.
@@ -673,31 +677,28 @@ void cmGlobalNinjaGenerator::EnableLanguage(
 // Called by:
 //   cmGlobalGenerator::Build()
 void cmGlobalNinjaGenerator::GenerateBuildCommand(
-  std::vector<std::string>& makeCommand, const std::string& makeProgram,
+  GeneratedMakeCommand& makeCommand, const std::string& makeProgram,
   const std::string& /*projectName*/, const std::string& /*projectDir*/,
   const std::string& targetName, const std::string& /*config*/, bool /*fast*/,
   int jobs, bool verbose, std::vector<std::string> const& makeOptions)
 {
-  makeCommand.push_back(this->SelectMakeProgram(makeProgram));
+  makeCommand.add(this->SelectMakeProgram(makeProgram));
 
   if (verbose) {
-    makeCommand.push_back("-v");
+    makeCommand.add("-v");
   }
 
   if ((jobs != cmake::NO_BUILD_PARALLEL_LEVEL) &&
       (jobs != cmake::DEFAULT_BUILD_PARALLEL_LEVEL)) {
-    makeCommand.push_back("-j");
-    makeCommand.push_back(std::to_string(jobs));
+    makeCommand.add("-j", std::to_string(jobs));
   }
 
-  makeCommand.insert(makeCommand.end(), makeOptions.begin(),
-                     makeOptions.end());
+  makeCommand.add(makeOptions.begin(), makeOptions.end());
   if (!targetName.empty()) {
     if (targetName == "clean") {
-      makeCommand.push_back("-t");
-      makeCommand.push_back("clean");
+      makeCommand.add("-t", "clean");
     } else {
-      makeCommand.push_back(targetName);
+      makeCommand.add(targetName);
     }
   }
 }
@@ -861,7 +862,7 @@ std::string const& cmGlobalNinjaGenerator::ConvertToNinjaPath(
   cmLocalNinjaGenerator* ng =
     static_cast<cmLocalNinjaGenerator*>(this->LocalGenerators[0]);
   std::string const& bin_dir = ng->GetState()->GetBinaryDirectory();
-  std::string convPath = ng->ConvertToRelativePath(bin_dir, path);
+  std::string convPath = ng->MaybeConvertToRelativePath(bin_dir, path);
   convPath = this->NinjaOutputPath(convPath);
 #ifdef _WIN32
   std::replace(convPath.begin(), convPath.end(), '/', '\\');
@@ -1479,6 +1480,11 @@ bool cmGlobalNinjaGenerator::SupportsImplicitOuts() const
 bool cmGlobalNinjaGenerator::SupportsManifestRestat() const
 {
   return this->NinjaSupportsManifestRestat;
+}
+
+bool cmGlobalNinjaGenerator::SupportsMultilineDepfile() const
+{
+  return this->NinjaSupportsMultilineDepfile;
 }
 
 void cmGlobalNinjaGenerator::WriteTargetClean(std::ostream& os)

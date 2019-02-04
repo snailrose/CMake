@@ -26,7 +26,6 @@
 #include "cmStateTypes.h"
 #include "cmSystemTools.h"
 #include "cmTarget.h"
-#include "cmake.h"
 #include "cmsys/FStream.hxx"
 #include "cmsys/SystemInformation.hxx"
 
@@ -111,7 +110,7 @@ static bool AddToSourceGroup(cmMakefile* makefile, std::string const& fileName,
         ost << ": " << property;
         ost << ": Could not find or create the source group ";
         ost << cmQtAutoGen::Quoted(groupName);
-        cmSystemTools::Error(ost.str().c_str());
+        cmSystemTools::Error(ost.str());
         return false;
       }
     }
@@ -352,7 +351,7 @@ bool cmQtAutoGenInitializer::InitCustomTargets()
 
     // Info directory
     this->Dir.Info = cbd;
-    this->Dir.Info += cmake::GetCMakeFilesDirectory();
+    this->Dir.Info += "/CMakeFiles";
     this->Dir.Info += '/';
     this->Dir.Info += this->Target->GetName();
     this->Dir.Info += "_autogen";
@@ -521,19 +520,16 @@ bool cmQtAutoGenInitializer::InitMoc()
 
   // Moc includes
   {
-    // We need to disable this until we have all implicit includes available.
-    // See issue #18669.
-    // bool const appendImplicit = (this->QtVersion.Major >= 5);
-
+    bool const appendImplicit = (this->QtVersion.Major >= 5);
     auto GetIncludeDirs =
-      [this, localGen](std::string const& cfg) -> std::vector<std::string> {
-      bool const appendImplicit = false;
+      [this, localGen,
+       appendImplicit](std::string const& cfg) -> std::vector<std::string> {
       // Get the include dirs for this target, without stripping the implicit
       // include dirs off, see
       // https://gitlab.kitware.com/cmake/cmake/issues/13667
       std::vector<std::string> dirs;
-      localGen->GetIncludeDirectories(dirs, this->Target, "CXX", cfg, false,
-                                      appendImplicit);
+      localGen->GetIncludeDirectoriesImplicit(dirs, this->Target, "CXX", cfg,
+                                              false, appendImplicit);
       return dirs;
     };
 
@@ -941,7 +937,7 @@ bool cmQtAutoGenInitializer::InitScanFiles()
       if (!qrc.Generated) {
         std::string error;
         if (!RccListInputs(qrc.QrcFile, qrc.Resources, error)) {
-          cmSystemTools::Error(error.c_str());
+          cmSystemTools::Error(error);
           return false;
         }
       }
@@ -963,7 +959,7 @@ bool cmQtAutoGenInitializer::InitAutogenTarget()
   // Files provided by the autogen target
   std::vector<std::string> autogenProvides;
   if (this->Moc.Enabled) {
-    this->AddGeneratedSource(this->Moc.MocsCompilation, GeneratorT::MOC);
+    this->AddGeneratedSource(this->Moc.MocsCompilation, GeneratorT::MOC, true);
     autogenProvides.push_back(this->Moc.MocsCompilation);
   }
 
@@ -1219,7 +1215,7 @@ bool cmQtAutoGenInitializer::SetupCustomTargets()
   if (!cmSystemTools::MakeDirectory(this->Dir.Info)) {
     std::string emsg = ("AutoGen: Could not create directory: ");
     emsg += Quoted(this->Dir.Info);
-    cmSystemTools::Error(emsg.c_str());
+    cmSystemTools::Error(emsg);
     return false;
   }
 
@@ -1307,7 +1303,7 @@ bool cmQtAutoGenInitializer::SetupWriteAutogenInfo()
   } else {
     std::string err = "AutoGen: Could not write file ";
     err += this->AutogenTarget.InfoFile;
-    cmSystemTools::Error(err.c_str());
+    cmSystemTools::Error(err);
     return false;
   }
 
@@ -1347,7 +1343,7 @@ bool cmQtAutoGenInitializer::SetupWriteRccInfo()
     } else {
       std::string err = "AutoRcc: Could not write file ";
       err += qrc.InfoFile;
-      cmSystemTools::Error(err.c_str());
+      cmSystemTools::Error(err);
       return false;
     }
   }
@@ -1356,7 +1352,8 @@ bool cmQtAutoGenInitializer::SetupWriteRccInfo()
 }
 
 void cmQtAutoGenInitializer::AddGeneratedSource(std::string const& filename,
-                                                GeneratorT genType)
+                                                GeneratorT genType,
+                                                bool prepend)
 {
   // Register source file in makefile
   cmMakefile* makefile = this->Target->Target->GetMakefile();
@@ -1370,10 +1367,10 @@ void cmQtAutoGenInitializer::AddGeneratedSource(std::string const& filename,
   AddToSourceGroup(makefile, filename, genType);
 
   // Add source file to target
-  this->Target->AddSource(filename);
+  this->Target->AddSource(filename, prepend);
 }
 
-static unsigned int CharPtrToInt(const char* const input)
+static unsigned int CharPtrToUInt(const char* const input)
 {
   unsigned long tmp = 0;
   if (input != nullptr && cmSystemTools::StringToULong(input, &tmp)) {
@@ -1382,36 +1379,43 @@ static unsigned int CharPtrToInt(const char* const input)
   return 0;
 }
 
-static unsigned int StringToInt(const std::string& input)
-{
-  return input.empty() ? 0 : CharPtrToInt(input.c_str());
-}
-
-static std::vector<cmQtAutoGenInitializer::IntegerVersion> GetKnownQtVersions(
+static std::vector<cmQtAutoGen::IntegerVersion> GetKnownQtVersions(
   cmGeneratorTarget const* target)
 {
   cmMakefile* makefile = target->Target->GetMakefile();
-
-  std::vector<cmQtAutoGenInitializer::IntegerVersion> result;
-  for (const std::string& prefix :
-       std::vector<std::string>({ "Qt6Core", "Qt5Core", "QT" })) {
-    auto tmp = cmQtAutoGenInitializer::IntegerVersion(
-      StringToInt(makefile->GetSafeDefinition(prefix + "_VERSION_MAJOR")),
-      StringToInt(makefile->GetSafeDefinition(prefix + "_VERSION_MINOR")));
-    if (tmp.Major != 0) {
-      result.push_back(tmp);
+  std::vector<cmQtAutoGen::IntegerVersion> result;
+  // Adds a version to the result (nullptr safe)
+  auto addVersion = [&result](const char* major, const char* minor) {
+    cmQtAutoGen::IntegerVersion ver(CharPtrToUInt(major),
+                                    CharPtrToUInt(minor));
+    if (ver.Major != 0) {
+      result.emplace_back(ver);
     }
+  };
+  // Qt version variable prefixes
+  std::array<std::string, 3> const prefixes{ { "Qt6Core", "Qt5Core", "QT" } };
+
+  // Read versions from variables
+  for (const std::string& prefix : prefixes) {
+    addVersion(makefile->GetDefinition(prefix + "_VERSION_MAJOR"),
+               makefile->GetDefinition(prefix + "_VERSION_MINOR"));
+  }
+
+  // Read versions from directory properties
+  for (const std::string& prefix : prefixes) {
+    addVersion(makefile->GetProperty(prefix + "_VERSION_MAJOR"),
+               makefile->GetProperty(prefix + "_VERSION_MINOR"));
   }
 
   return result;
 }
 
-std::pair<cmQtAutoGenInitializer::IntegerVersion, unsigned int>
+std::pair<cmQtAutoGen::IntegerVersion, unsigned int>
 cmQtAutoGenInitializer::GetQtVersion(cmGeneratorTarget const* target)
 {
   std::pair<IntegerVersion, unsigned int> res(
     IntegerVersion(),
-    CharPtrToInt(target->GetLinkInterfaceDependentStringProperty(
+    CharPtrToUInt(target->GetLinkInterfaceDependentStringProperty(
       "QT_MAJOR_VERSION", "")));
 
   auto knownQtVersions = GetKnownQtVersions(target);
@@ -1482,7 +1486,7 @@ std::pair<bool, std::string> GetQtExecutable(
     if (cmSystemTools::FileExists(result, true)) {
       std::vector<std::string> command;
       command.push_back(result);
-      command.push_back("-h");
+      command.emplace_back("-h");
       std::string stdOut;
       std::string stdErr;
       int retVal = 0;
@@ -1511,7 +1515,7 @@ std::pair<bool, std::string> GetQtExecutable(
     msg += target->GetName();
     msg += "): ";
     msg += err;
-    cmSystemTools::Error(msg.c_str());
+    cmSystemTools::Error(msg);
     return std::make_pair(false, "");
   }
 
@@ -1546,9 +1550,9 @@ bool cmQtAutoGenInitializer::GetRccExecutable()
 
   if (this->QtVersion.Major == 5 || this->QtVersion.Major == 6) {
     if (stdOut.find("--list") != std::string::npos) {
-      this->Rcc.ListOptions.push_back("--list");
+      this->Rcc.ListOptions.emplace_back("--list");
     } else {
-      this->Rcc.ListOptions.push_back("-list");
+      this->Rcc.ListOptions.emplace_back("-list");
     }
   }
   return true;

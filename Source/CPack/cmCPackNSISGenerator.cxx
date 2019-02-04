@@ -30,9 +30,7 @@ cmCPackNSISGenerator::cmCPackNSISGenerator(bool nsis64)
   Nsis64 = nsis64;
 }
 
-cmCPackNSISGenerator::~cmCPackNSISGenerator()
-{
-}
+cmCPackNSISGenerator::~cmCPackNSISGenerator() = default;
 
 int cmCPackNSISGenerator::PackageFiles()
 {
@@ -610,7 +608,7 @@ bool cmCPackNSISGenerator::GetListOfSubdirectories(
       }
     }
   }
-  dirs.push_back(topdir);
+  dirs.emplace_back(topdir);
   return true;
 }
 

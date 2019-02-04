@@ -104,7 +104,7 @@ bool cmCTestSubdirCommand::InitialPass(std::vector<std::string> const& args,
       }
       fname += "/";
       fname += testFilename;
-      readit = this->Makefile->ReadDependentFile(fname.c_str());
+      readit = this->Makefile->ReadDependentFile(fname);
     }
     if (!readit) {
       std::string m = "Could not find include file: ";
@@ -170,7 +170,7 @@ bool cmCTestAddSubdirectoryCommand::InitialPass(
     }
     fname += "/";
     fname += testFilename;
-    readit = this->Makefile->ReadDependentFile(fname.c_str());
+    readit = this->Makefile->ReadDependentFile(fname);
   }
   if (!readit) {
     std::string m = "Could not find include file: ";
@@ -1524,7 +1524,7 @@ void cmCTestTestHandler::AddConfigurations(
   }
   tempPath = filepath + filename;
   attempted.push_back(tempPath);
-  attemptedConfigs.push_back("");
+  attemptedConfigs.emplace_back();
 
   if (!ctest->GetConfigType().empty()) {
     tempPath = filepath;
@@ -1547,32 +1547,32 @@ void cmCTestTestHandler::AddConfigurations(
     tempPath += "Release/";
     tempPath += filename;
     attempted.push_back(tempPath);
-    attemptedConfigs.push_back("Release");
+    attemptedConfigs.emplace_back("Release");
     tempPath = filepath;
     tempPath += "Debug/";
     tempPath += filename;
     attempted.push_back(tempPath);
-    attemptedConfigs.push_back("Debug");
+    attemptedConfigs.emplace_back("Debug");
     tempPath = filepath;
     tempPath += "MinSizeRel/";
     tempPath += filename;
     attempted.push_back(tempPath);
-    attemptedConfigs.push_back("MinSizeRel");
+    attemptedConfigs.emplace_back("MinSizeRel");
     tempPath = filepath;
     tempPath += "RelWithDebInfo/";
     tempPath += filename;
     attempted.push_back(tempPath);
-    attemptedConfigs.push_back("RelWithDebInfo");
+    attemptedConfigs.emplace_back("RelWithDebInfo");
     tempPath = filepath;
     tempPath += "Deployment/";
     tempPath += filename;
     attempted.push_back(tempPath);
-    attemptedConfigs.push_back("Deployment");
+    attemptedConfigs.emplace_back("Deployment");
     tempPath = filepath;
     tempPath += "Development/";
     tempPath += filename;
     attempted.push_back(tempPath);
-    attemptedConfigs.push_back("Deployment");
+    attemptedConfigs.emplace_back("Deployment");
   }
 }
 

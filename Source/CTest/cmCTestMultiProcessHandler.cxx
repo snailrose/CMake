@@ -44,7 +44,6 @@ public:
     : Handler(handler)
   {
   }
-  ~TestComparator() {}
 
   // Sorts tests in descending order of cost
   bool operator()(int index1, int index2) const
@@ -70,9 +69,7 @@ cmCTestMultiProcessHandler::cmCTestMultiProcessHandler()
   this->SerialTestRunning = false;
 }
 
-cmCTestMultiProcessHandler::~cmCTestMultiProcessHandler()
-{
-}
+cmCTestMultiProcessHandler::~cmCTestMultiProcessHandler() = default;
 
 // Set the tests
 void cmCTestMultiProcessHandler::SetTests(TestMap& tests,
@@ -538,7 +535,7 @@ void cmCTestMultiProcessHandler::UpdateCostData()
     fout << f << "\n";
   }
   fout.close();
-  cmSystemTools::RenameFile(tmpout.c_str(), fname.c_str());
+  cmSystemTools::RenameFile(tmpout, fname);
 }
 
 void cmCTestMultiProcessHandler::ReadCostData()
@@ -1038,6 +1035,11 @@ void cmCTestMultiProcessHandler::PrintOutputAsJson()
     testRun.SetIndex(p.Index);
     testRun.SetTestProperties(&p);
     testRun.ComputeArguments();
+
+    // Skip tests not available in this configuration.
+    if (p.Args.size() >= 2 && p.Args[1] == "NOT_AVAILABLE") {
+      continue;
+    }
 
     Json::Value testInfo = DumpCTestInfo(testRun, p, backtraceGraph);
     tests.append(testInfo);

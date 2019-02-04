@@ -70,7 +70,7 @@ bool cmGlobalGhsMultiGenerator::SetGeneratorToolset(std::string const& ts,
       "Green Hills MULTI: -T <toolset> not specified; defaulting to \"";
     message += tsp;
     message += "\"";
-    cmSystemTools::Message(message.c_str());
+    cmSystemTools::Message(message);
 
     /* store the full toolset for later use
      * -- already done if -T<toolset> was specified
@@ -93,7 +93,7 @@ bool cmGlobalGhsMultiGenerator::SetGeneratorToolset(std::string const& ts,
     message += prevTool;
     message += "\nEither remove the CMakeCache.txt file and CMakeFiles "
                "directory or choose a different binary directory.";
-    cmSystemTools::Error(message.c_str());
+    cmSystemTools::Error(message);
     return false;
   } else {
     /* store the toolset that is being used for this build */
@@ -178,7 +178,7 @@ void cmGlobalGhsMultiGenerator::GetToolset(cmMakefile* mf, std::string& tsd,
     if (output.empty()) {
       std::string msg =
         "No GHS toolsets found in GHS_TOOLSET_ROOT \"" + tsd + "\".";
-      cmSystemTools::Error(msg.c_str());
+      cmSystemTools::Error(msg);
       tsd = "";
     } else {
       tsd += output.back();
@@ -189,7 +189,7 @@ void cmGlobalGhsMultiGenerator::GetToolset(cmMakefile* mf, std::string& tsd,
     tryPath = cmSystemTools::CollapseCombinedPath(tsd, ts);
     if (!cmSystemTools::FileExists(tryPath)) {
       std::string msg = "GHS toolset \"" + tryPath + "\" not found.";
-      cmSystemTools::Error(msg.c_str());
+      cmSystemTools::Error(msg);
       tsd = "";
     } else {
       tsd = tryPath;
@@ -297,7 +297,7 @@ void cmGlobalGhsMultiGenerator::WriteSubProjects(
     if (projName && projType) {
       cmLocalGenerator* lg = target->GetLocalGenerator();
       std::string dir = lg->GetCurrentBinaryDirectory();
-      dir = root->ConvertToRelativePath(rootBinaryDir, dir.c_str());
+      dir = root->MaybeConvertToRelativePath(rootBinaryDir, dir.c_str());
       if (dir == ".") {
         dir.clear();
       } else {
@@ -370,25 +370,23 @@ void cmGlobalGhsMultiGenerator::OutputTopLevelProject(
 }
 
 void cmGlobalGhsMultiGenerator::GenerateBuildCommand(
-  std::vector<std::string>& makeCommand, const std::string& makeProgram,
+  GeneratedMakeCommand& makeCommand, const std::string& makeProgram,
   const std::string& projectName, const std::string& projectDir,
   const std::string& targetName, const std::string& /*config*/, bool /*fast*/,
   int jobs, bool /*verbose*/, std::vector<std::string> const& makeOptions)
 {
   const char* gbuild =
     this->CMakeInstance->GetCacheDefinition("CMAKE_MAKE_PROGRAM");
-  makeCommand.push_back(
-    this->SelectMakeProgram(makeProgram, (std::string)gbuild));
+  makeCommand.add(this->SelectMakeProgram(makeProgram, (std::string)gbuild));
 
   if (jobs != cmake::NO_BUILD_PARALLEL_LEVEL) {
-    makeCommand.push_back("-parallel");
+    makeCommand.add("-parallel");
     if (jobs != cmake::DEFAULT_BUILD_PARALLEL_LEVEL) {
-      makeCommand.push_back(std::to_string(jobs));
+      makeCommand.add(std::to_string(jobs));
     }
   }
 
-  makeCommand.insert(makeCommand.end(), makeOptions.begin(),
-                     makeOptions.end());
+  makeCommand.add(makeOptions.begin(), makeOptions.end());
 
   /* determine which top-project file to use */
   std::string proj = projectName + ".top" + FILE_EXTENSION;
@@ -401,16 +399,15 @@ void cmGlobalGhsMultiGenerator::GenerateBuildCommand(
     }
   }
 
-  makeCommand.push_back("-top");
-  makeCommand.push_back(proj);
+  makeCommand.add("-top", proj);
   if (!targetName.empty()) {
     if (targetName == "clean") {
-      makeCommand.push_back("-clean");
+      makeCommand.add("-clean");
     } else {
       if (targetName.compare(targetName.size() - 4, 4, ".gpj") == 0) {
-        makeCommand.push_back(targetName);
+        makeCommand.add(targetName);
       } else {
-        makeCommand.push_back(targetName + ".gpj");
+        makeCommand.add(targetName + ".gpj");
       }
     }
   }

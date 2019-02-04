@@ -76,6 +76,15 @@
 #  include <malloc.h> /* for malloc/free on QNX */
 #endif
 
+namespace {
+
+cmSystemTools::InterruptCallback s_InterruptCallback;
+cmSystemTools::MessageCallback s_MessageCallback;
+cmSystemTools::OutputCallback s_StderrCallback;
+cmSystemTools::OutputCallback s_StdoutCallback;
+
+} // namespace
+
 static bool cm_isspace(char c)
 {
   return ((c & 0x80) == 0) && isspace(c);
@@ -160,15 +169,6 @@ bool cmSystemTools::s_ErrorOccured = false;
 bool cmSystemTools::s_FatalErrorOccured = false;
 bool cmSystemTools::s_DisableMessages = false;
 bool cmSystemTools::s_ForceUnixPaths = false;
-
-cmSystemTools::MessageCallback cmSystemTools::s_MessageCallback;
-cmSystemTools::OutputCallback cmSystemTools::s_StdoutCallback;
-cmSystemTools::OutputCallback cmSystemTools::s_StderrCallback;
-cmSystemTools::InterruptCallback cmSystemTools::s_InterruptCallback;
-void* cmSystemTools::s_MessageCallbackClientData;
-void* cmSystemTools::s_StdoutCallbackClientData;
-void* cmSystemTools::s_StderrCallbackClientData;
-void* cmSystemTools::s_InterruptCallbackClientData;
 
 // replace replace with with as many times as it shows up in source.
 // write the result into source.
@@ -267,68 +267,59 @@ void cmSystemTools::Error(const char* m1, const char* m2, const char* m3,
     message += m4;
   }
   cmSystemTools::s_ErrorOccured = true;
-  cmSystemTools::Message(message.c_str(), "Error");
+  cmSystemTools::Message(message, "Error");
 }
 
-void cmSystemTools::SetInterruptCallback(InterruptCallback f, void* clientData)
+void cmSystemTools::Error(const std::string& m)
 {
-  s_InterruptCallback = f;
-  s_InterruptCallbackClientData = clientData;
+  std::string message = "CMake Error: " + m;
+  cmSystemTools::s_ErrorOccured = true;
+  cmSystemTools::Message(message, "Error");
+}
+
+void cmSystemTools::SetInterruptCallback(InterruptCallback f)
+{
+  s_InterruptCallback = std::move(f);
 }
 
 bool cmSystemTools::GetInterruptFlag()
 {
   if (s_InterruptCallback) {
-    return (*s_InterruptCallback)(s_InterruptCallbackClientData);
+    return s_InterruptCallback();
   }
   return false;
 }
 
-void cmSystemTools::SetMessageCallback(MessageCallback f, void* clientData)
+void cmSystemTools::SetMessageCallback(MessageCallback f)
 {
-  s_MessageCallback = f;
-  s_MessageCallbackClientData = clientData;
+  s_MessageCallback = std::move(f);
 }
 
-void cmSystemTools::SetStdoutCallback(OutputCallback f, void* clientData)
+void cmSystemTools::SetStdoutCallback(OutputCallback f)
 {
-  s_StdoutCallback = f;
-  s_StdoutCallbackClientData = clientData;
+  s_StdoutCallback = std::move(f);
 }
 
-void cmSystemTools::SetStderrCallback(OutputCallback f, void* clientData)
+void cmSystemTools::SetStderrCallback(OutputCallback f)
 {
-  s_StderrCallback = f;
-  s_StderrCallbackClientData = clientData;
+  s_StderrCallback = std::move(f);
 }
 
-void cmSystemTools::Stdout(const char* s)
-{
-  cmSystemTools::Stdout(s, strlen(s));
-}
-
-void cmSystemTools::Stderr(const char* s)
-{
-  cmSystemTools::Stderr(s, strlen(s));
-}
-
-void cmSystemTools::Stderr(const char* s, size_t length)
+void cmSystemTools::Stderr(const std::string& s)
 {
   if (s_StderrCallback) {
-    (*s_StderrCallback)(s, length, s_StderrCallbackClientData);
+    s_StderrCallback(s);
   } else {
-    std::cerr.write(s, length);
-    std::cerr.flush();
+    std::cerr << s << std::flush;
   }
 }
 
-void cmSystemTools::Stdout(const char* s, size_t length)
+void cmSystemTools::Stdout(const std::string& s)
 {
   if (s_StdoutCallback) {
-    (*s_StdoutCallback)(s, length, s_StdoutCallbackClientData);
+    s_StdoutCallback(s);
   } else {
-    std::cout.write(s, length);
-    std::cout.flush();
+    std::cout << s << std::flush;
   }
 }
 
@@ -338,8 +329,7 @@ void cmSystemTools::Message(const char* m1, const char* title)
     return;
   }
   if (s_MessageCallback) {
-    (*s_MessageCallback)(m1, title, s_DisableMessages,
-                         s_MessageCallbackClientData);
+    s_MessageCallback(m1, title);
     return;
   }
   std::cerr << m1 << std::endl << std::flush;
@@ -350,7 +340,7 @@ void cmSystemTools::ReportLastSystemError(const char* msg)
   std::string m = msg;
   m += ": System Error: ";
   m += Superclass::GetLastSystemError();
-  cmSystemTools::Error(m.c_str());
+  cmSystemTools::Error(m);
 }
 
 bool cmSystemTools::IsInternallyOn(const char* val)
@@ -534,7 +524,7 @@ public:
   void Store(std::vector<std::string>& args) const
   {
     for (char** arg = this->ArgV; arg && *arg; ++arg) {
-      args.push_back(*arg);
+      args.emplace_back(*arg);
     }
   }
 };
@@ -561,7 +551,7 @@ std::vector<std::string> cmSystemTools::HandleResponseFile(
         error += cmSystemTools::GetLastSystemError();
         error += "):\n  ";
         error += arg.substr(1);
-        cmSystemTools::Error(error.c_str());
+        cmSystemTools::Error(error);
       } else {
         std::string line;
         cmSystemTools::GetLineFromStream(responseFile, line);
@@ -792,7 +782,7 @@ bool cmSystemTools::RunSingleCommand(std::vector<std::string> const& command,
       if (pipe == cmsysProcess_Pipe_STDOUT) {
         if (outputflag != OUTPUT_NONE) {
           processOutput.DecodeText(data, length, strdata, 1);
-          cmSystemTools::Stdout(strdata.c_str(), strdata.size());
+          cmSystemTools::Stdout(strdata);
         }
         if (captureStdOut) {
           tempStdOut.insert(tempStdOut.end(), data, data + length);
@@ -800,7 +790,7 @@ bool cmSystemTools::RunSingleCommand(std::vector<std::string> const& command,
       } else if (pipe == cmsysProcess_Pipe_STDERR) {
         if (outputflag != OUTPUT_NONE) {
           processOutput.DecodeText(data, length, strdata, 2);
-          cmSystemTools::Stderr(strdata.c_str(), strdata.size());
+          cmSystemTools::Stderr(strdata);
         }
         if (captureStdErr) {
           tempStdErr.insert(tempStdErr.end(), data, data + length);
@@ -811,11 +801,11 @@ bool cmSystemTools::RunSingleCommand(std::vector<std::string> const& command,
     if (outputflag != OUTPUT_NONE) {
       processOutput.DecodeText(std::string(), strdata, 1);
       if (!strdata.empty()) {
-        cmSystemTools::Stdout(strdata.c_str(), strdata.size());
+        cmSystemTools::Stdout(strdata);
       }
       processOutput.DecodeText(std::string(), strdata, 2);
       if (!strdata.empty()) {
-        cmSystemTools::Stderr(strdata.c_str(), strdata.size());
+        cmSystemTools::Stderr(strdata);
       }
     }
   }
@@ -945,15 +935,10 @@ std::string cmSystemTools::FileExistsInParentDirectories(const char* fname,
   return "";
 }
 
-bool cmSystemTools::cmCopyFile(const char* source, const char* destination)
+bool cmSystemTools::cmCopyFile(const std::string& source,
+                               const std::string& destination)
 {
   return Superclass::CopyFileAlways(source, destination);
-}
-
-bool cmSystemTools::CopyFileIfDifferent(const char* source,
-                                        const char* destination)
-{
-  return Superclass::CopyFileIfDifferent(source, destination);
 }
 
 #ifdef _WIN32
@@ -1040,7 +1025,8 @@ void cmSystemTools::InitializeLibUV()
 #endif
 }
 
-bool cmSystemTools::RenameFile(const char* oldname, const char* newname)
+bool cmSystemTools::RenameFile(const std::string& oldname,
+                               const std::string& newname)
 {
 #ifdef _WIN32
 #  ifndef INVALID_FILE_ATTRIBUTES
@@ -1078,7 +1064,7 @@ bool cmSystemTools::RenameFile(const char* oldname, const char* newname)
   return retry.Count > 0;
 #else
   /* On UNIX we have an OS-provided call to do this atomically.  */
-  return rename(oldname, newname) == 0;
+  return rename(oldname.c_str(), newname.c_str()) == 0;
 #endif
 }
 
@@ -1586,7 +1572,7 @@ std::vector<std::string> cmSystemTools::GetEnvironmentVariables()
   std::vector<std::string> env;
   int cc;
   for (cc = 0; environ[cc]; ++cc) {
-    env.push_back(environ[cc]);
+    env.emplace_back(environ[cc]);
   }
   return env;
 }
@@ -1663,7 +1649,7 @@ bool cmSystemTools::CreateTar(const char* outFileName,
     e += outFileName;
     e += "\": ";
     e += cmSystemTools::GetLastSystemError();
-    cmSystemTools::Error(e.c_str());
+    cmSystemTools::Error(e);
     return false;
   }
   cmArchiveWrite::Compress compress = cmArchiveWrite::CompressNone;
@@ -1696,7 +1682,7 @@ bool cmSystemTools::CreateTar(const char* outFileName,
     }
   }
   if (!a) {
-    cmSystemTools::Error(a.GetError().c_str());
+    cmSystemTools::Error(a.GetError());
     return false;
   }
   return true;
@@ -1899,13 +1885,13 @@ bool extract_tar(const char* outFileName, bool verbose, bool extract)
     if (verbose) {
       if (extract) {
         cmSystemTools::Stdout("x ");
-        cmSystemTools::Stdout(cm_archive_entry_pathname(entry).c_str());
+        cmSystemTools::Stdout(cm_archive_entry_pathname(entry));
       } else {
         list_item_verbose(stdout, entry);
       }
       cmSystemTools::Stdout("\n");
     } else if (!extract) {
-      cmSystemTools::Stdout(cm_archive_entry_pathname(entry).c_str());
+      cmSystemTools::Stdout(cm_archive_entry_pathname(entry));
       cmSystemTools::Stdout("\n");
     }
     if (extract) {
@@ -3063,7 +3049,7 @@ std::vector<std::string> cmSystemTools::tokenize(const std::string& str,
   } while (tokend != std::string::npos);
 
   if (tokens.empty()) {
-    tokens.push_back("");
+    tokens.emplace_back();
   }
   return tokens;
 }
@@ -3114,7 +3100,8 @@ std::string cmSystemTools::EncodeURL(std::string const& in, bool escapeSlashes)
 }
 
 bool cmSystemTools::CreateSymlink(const std::string& origName,
-                                  const std::string& newName)
+                                  const std::string& newName,
+                                  std::string* errorMessage)
 {
   uv_fs_t req;
   int flags = 0;
@@ -3128,7 +3115,32 @@ bool cmSystemTools::CreateSymlink(const std::string& origName,
   if (err) {
     std::string e =
       "failed to create symbolic link '" + newName + "': " + uv_strerror(err);
-    cmSystemTools::Error(e.c_str());
+    if (errorMessage) {
+      *errorMessage = std::move(e);
+    } else {
+      cmSystemTools::Error(e);
+    }
+    return false;
+  }
+
+  return true;
+}
+
+bool cmSystemTools::CreateLink(const std::string& origName,
+                               const std::string& newName,
+                               std::string* errorMessage)
+{
+  uv_fs_t req;
+  int err =
+    uv_fs_link(nullptr, &req, origName.c_str(), newName.c_str(), nullptr);
+  if (err) {
+    std::string e =
+      "failed to create link '" + newName + "': " + uv_strerror(err);
+    if (errorMessage) {
+      *errorMessage = std::move(e);
+    } else {
+      cmSystemTools::Error(e);
+    }
     return false;
   }
 

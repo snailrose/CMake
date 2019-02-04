@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unordered_set>
+#include <utility>
 
 #include "cmAlgorithms.h"
 #include "cmComputeLinkInformation.h"
@@ -202,7 +203,7 @@ std::string cmGeneratorTarget::GetExportName() const
       std::ostringstream e;
       e << "EXPORT_NAME property \"" << exportName << "\" for \""
         << this->GetName() << "\": is not valid.";
-      cmSystemTools::Error(e.str().c_str());
+      cmSystemTools::Error(e.str());
       return "";
     }
     return exportName;
@@ -319,7 +320,7 @@ std::string cmGeneratorTarget::GetOutputName(
       props.push_back(configUpper + "_OUTPUT_NAME");
     }
     // OUTPUT_NAME
-    props.push_back("OUTPUT_NAME");
+    props.emplace_back("OUTPUT_NAME");
 
     std::string outName;
     for (std::string const& p : props) {
@@ -355,20 +356,22 @@ void cmGeneratorTarget::ClearSourcesCache()
   this->Objects.clear();
 }
 
-void cmGeneratorTarget::AddSourceCommon(const std::string& src)
+void cmGeneratorTarget::AddSourceCommon(const std::string& src, bool before)
 {
   cmListFileBacktrace lfbt = this->Makefile->GetBacktrace();
   cmGeneratorExpression ge(lfbt);
   std::unique_ptr<cmCompiledGeneratorExpression> cge = ge.Parse(src);
   cge->SetEvaluateForBuildsystem(true);
-  this->SourceEntries.push_back(new TargetPropertyEntry(std::move(cge)));
+  this->SourceEntries.insert(before ? this->SourceEntries.begin()
+                                    : this->SourceEntries.end(),
+                             new TargetPropertyEntry(std::move(cge)));
   this->ClearSourcesCache();
 }
 
-void cmGeneratorTarget::AddSource(const std::string& src)
+void cmGeneratorTarget::AddSource(const std::string& src, bool before)
 {
-  this->Target->AddSource(src);
-  this->AddSourceCommon(src);
+  this->Target->AddSource(src, before);
+  this->AddSourceCommon(src, before);
 }
 
 void cmGeneratorTarget::AddTracedSources(std::vector<std::string> const& srcs)
@@ -387,12 +390,10 @@ void cmGeneratorTarget::AddIncludeDirectory(const std::string& src,
   cmGeneratorExpression ge(lfbt);
   std::unique_ptr<cmCompiledGeneratorExpression> cge = ge.Parse(src);
   cge->SetEvaluateForBuildsystem(true);
-  // Insert before begin/end
-  std::vector<TargetPropertyEntry*>::iterator pos = before
-    ? this->IncludeDirectoriesEntries.begin()
-    : this->IncludeDirectoriesEntries.end();
   this->IncludeDirectoriesEntries.insert(
-    pos, new TargetPropertyEntry(std::move(cge)));
+    before ? this->IncludeDirectoriesEntries.begin()
+           : this->IncludeDirectoriesEntries.end(),
+    new TargetPropertyEntry(std::move(cge)));
 }
 
 std::vector<cmSourceFile*> const* cmGeneratorTarget::GetSourceDepends(
@@ -988,7 +989,7 @@ std::vector<BT<std::string>> cmGeneratorTarget::GetSourceFilePaths(
             item.back() == '>') {
           continue;
         }
-        files.push_back(item);
+        files.emplace_back(item);
       }
     }
     return files;
@@ -1805,10 +1806,10 @@ class cmTargetCollectLinkLanguages
 {
 public:
   cmTargetCollectLinkLanguages(cmGeneratorTarget const* target,
-                               const std::string& config,
+                               std::string config,
                                std::unordered_set<std::string>& languages,
                                cmGeneratorTarget const* head)
-    : Config(config)
+    : Config(std::move(config))
     , Languages(languages)
     , HeadTarget(head)
     , Target(target)
@@ -3260,7 +3261,7 @@ void processLinkDirectories(
       // in case projects set the LINK_DIRECTORIES property directly.
       cmSystemTools::ConvertToUnixSlashes(entryDirectory);
       if (uniqueDirectories.insert(entryDirectory).second) {
-        directories.push_back(entryDirectory);
+        directories.emplace_back(entryDirectory);
         if (debugDirectories) {
           usedDirectories += " * " + entryDirectory + "\n";
         }
@@ -3838,7 +3839,7 @@ std::string cmGeneratorTarget::GetPDBName(const std::string& config) const
   }
 
   // PDB_NAME
-  props.push_back("PDB_NAME");
+  props.emplace_back("PDB_NAME");
 
   for (std::string const& p : props) {
     if (const char* outName = this->GetProperty(p)) {
@@ -3858,6 +3859,13 @@ std::string cmGeneratorTarget::GetObjectDirectory(
   // find and replace $(PROJECT_NAME) xcode placeholder
   const std::string projectName = this->LocalGenerator->GetProjectName();
   cmSystemTools::ReplaceString(obj_dir, "$(PROJECT_NAME)", projectName);
+  // Replace Xcode's placeholder for the object file directory since
+  // installation and export scripts need to know the real directory.
+  // Xcode has build-time settings (e.g. for sanitizers) that affect this,
+  // but we use the default here.  Users that want to enable sanitizers
+  // will do so at the cost of object library installation and export.
+  cmSystemTools::ReplaceString(obj_dir, "$(OBJECT_FILE_DIR_normal:base)",
+                               "Objects-normal");
 #endif
   return obj_dir;
 }
@@ -4586,7 +4594,7 @@ PropertyType checkInterfacePropertyCompatibility(cmGeneratorTarget const* tgt,
             << " property requirement\nof "
                "dependency \""
             << theTarget->GetName() << "\".\n";
-          cmSystemTools::Error(e.str().c_str());
+          cmSystemTools::Error(e.str());
           break;
         }
         propContent = consistent.second;
@@ -4611,7 +4619,7 @@ PropertyType checkInterfacePropertyCompatibility(cmGeneratorTarget const* tgt,
                "already. The INTERFACE_"
             << p << " property on\ndependency \"" << theTarget->GetName()
             << "\" is in conflict.\n";
-          cmSystemTools::Error(e.str().c_str());
+          cmSystemTools::Error(e.str());
           break;
         }
         propContent = consistent.second;
@@ -4631,7 +4639,7 @@ PropertyType checkInterfacePropertyCompatibility(cmGeneratorTarget const* tgt,
           e << "The INTERFACE_" << p << " property of \""
             << theTarget->GetName() << "\" does\nnot agree with the value of "
             << p << " already determined\nfor \"" << tgt->GetName() << "\".\n";
-          cmSystemTools::Error(e.str().c_str());
+          cmSystemTools::Error(e.str());
           break;
         }
         propContent = consistent.second;
@@ -6140,7 +6148,7 @@ bool cmGeneratorTarget::HasImportLibrary(std::string const& config) const
 std::string cmGeneratorTarget::GetSupportDirectory() const
 {
   std::string dir = this->LocalGenerator->GetCurrentBinaryDirectory();
-  dir += cmake::GetCMakeFilesDirectory();
+  dir += "/CMakeFiles";
   dir += "/";
   dir += this->GetName();
 #if defined(__VMS)

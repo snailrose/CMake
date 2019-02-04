@@ -166,13 +166,13 @@ class BacktraceData
   }
 
 public:
-  BacktraceData(std::string const& topSource);
+  BacktraceData(std::string topSource);
   bool Add(cmListFileBacktrace const& bt, Json::ArrayIndex& index);
   Json::Value Dump();
 };
 
-BacktraceData::BacktraceData(std::string const& topSource)
-  : TopSource(topSource)
+BacktraceData::BacktraceData(std::string topSource)
+  : TopSource(std::move(topSource))
 {
 }
 
@@ -727,7 +727,7 @@ void Target::ProcessLanguage(std::string const& lang)
     lg->GetTargetDefines(this->GT, this->Config, lang);
   cd.SetDefines(defines);
   std::vector<BT<std::string>> includePathList =
-    lg->GetIncludeDirectories(this->GT, lang, this->Config, true);
+    lg->GetIncludeDirectories(this->GT, lang, this->Config);
   for (BT<std::string> const& i : includePathList) {
     cd.Includes.emplace_back(
       i, this->GT->IsSystemIncludeDirectory(i.Value, this->Config, lang));

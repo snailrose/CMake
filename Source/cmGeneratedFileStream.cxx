@@ -102,9 +102,7 @@ void cmGeneratedFileStream::SetCompressionExtraExtension(bool ext)
   this->CompressExtraExtension = ext;
 }
 
-cmGeneratedFileStreamBase::cmGeneratedFileStreamBase()
-{
-}
+cmGeneratedFileStreamBase::cmGeneratedFileStreamBase() = default;
 
 cmGeneratedFileStreamBase::cmGeneratedFileStreamBase(std::string const& name)
 {
@@ -210,7 +208,7 @@ int cmGeneratedFileStreamBase::CompressFile(std::string const&,
 int cmGeneratedFileStreamBase::RenameFile(std::string const& oldname,
                                           std::string const& newname)
 {
-  return cmSystemTools::RenameFile(oldname.c_str(), newname.c_str());
+  return cmSystemTools::RenameFile(oldname, newname);
 }
 
 void cmGeneratedFileStream::SetName(const std::string& fname)

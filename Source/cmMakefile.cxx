@@ -45,6 +45,8 @@
 #include "cm_sys_stat.h"
 #include "cmake.h"
 
+#include "cmConfigure.h" // IWYU pragma: keep
+
 #ifdef CMAKE_BUILD_WITH_CMAKE
 #  include "cmVariableWatch.h"
 #endif
@@ -83,6 +85,7 @@ cmMakefile::cmMakefile(cmGlobalGenerator* globalGenerator,
   this->StateSnapshot =
     this->StateSnapshot.GetState()->CreatePolicyScopeSnapshot(
       this->StateSnapshot);
+  this->RecursionDepth = 0;
 
   // Enter a policy level for this directory.
   this->PushPolicy();
@@ -319,7 +322,7 @@ void cmMakefile::PrintCommandTrace(const cmListFileFunction& lff) const
     msg << " ";
   }
   msg << ")";
-  cmSystemTools::Message(msg.str().c_str());
+  cmSystemTools::Message(msg.str());
 }
 
 // Helper class to make sure the call stack is valid.
@@ -333,12 +336,14 @@ public:
     cmListFileContext const& lfc = cmListFileContext::FromCommandContext(
       cc, this->Makefile->StateSnapshot.GetExecutionListFile());
     this->Makefile->Backtrace = this->Makefile->Backtrace.Push(lfc);
+    ++this->Makefile->RecursionDepth;
     this->Makefile->ExecutionStatusStack.push_back(&status);
   }
 
   ~cmMakefileCall()
   {
     this->Makefile->ExecutionStatusStack.pop_back();
+    --this->Makefile->RecursionDepth;
     this->Makefile->Backtrace = this->Makefile->Backtrace.Pop();
   }
 
@@ -360,6 +365,24 @@ bool cmMakefile::ExecuteCommand(const cmListFileFunction& lff,
   // Place this call on the call stack.
   cmMakefileCall stack_manager(this, lff, status);
   static_cast<void>(stack_manager);
+
+  // Check for maximum recursion depth.
+  int depth = CMake_DEFAULT_RECURSION_LIMIT;
+  const char* depthStr = this->GetDefinition("CMAKE_MAXIMUM_RECURSION_DEPTH");
+  if (depthStr) {
+    std::istringstream s(depthStr);
+    int d;
+    if (s >> d) {
+      depth = d;
+    }
+  }
+  if (this->RecursionDepth > depth) {
+    std::ostringstream e;
+    e << "Maximum recursion depth of " << depth << " exceeded";
+    this->IssueMessage(MessageType::FATAL_ERROR, e.str());
+    cmSystemTools::SetFatalErrorOccured();
+    return false;
+  }
 
   // Lookup the command prototype.
   if (cmCommand* proto =
@@ -533,7 +556,8 @@ void cmMakefile::IncludeScope::EnforceCMP0011()
   }
 }
 
-bool cmMakefile::ReadDependentFile(const char* filename, bool noPolicyScope)
+bool cmMakefile::ReadDependentFile(const std::string& filename,
+                                   bool noPolicyScope)
 {
   this->AddDefinition("CMAKE_PARENT_LIST_FILE",
                       this->GetDefinition("CMAKE_CURRENT_LIST_FILE"));
@@ -586,7 +610,7 @@ private:
   bool ReportError;
 };
 
-bool cmMakefile::ReadListFile(const char* filename)
+bool cmMakefile::ReadListFile(const std::string& filename)
 {
   std::string filenametoread = cmSystemTools::CollapseFullPath(
     filename, this->GetCurrentSourceDirectory());
@@ -1127,7 +1151,7 @@ cmTarget* cmMakefile::AddUtilityCommand(
   // Create a target instance for this utility.
   cmTarget* target = this->AddNewTarget(cmStateEnums::UTILITY, utilityName);
   target->SetIsGeneratorProvided(origin == TargetOrigin::Generator);
-  if (excludeFromAll) {
+  if (excludeFromAll || this->GetPropertyAsBool("EXCLUDE_FROM_ALL")) {
     target->SetProperty("EXCLUDE_FROM_ALL", "TRUE");
   }
   if (!comment) {
@@ -1138,7 +1162,7 @@ cmTarget* cmMakefile::AddUtilityCommand(
   // Store the custom command in the target.
   if (!commandLines.empty() || !depends.empty()) {
     std::string force = this->GetCurrentBinaryDirectory();
-    force += cmake::GetCMakeFilesDirectory();
+    force += "/CMakeFiles";
     force += "/";
     force += utilityName;
     std::vector<std::string> forced;
@@ -1368,6 +1392,9 @@ void cmMakefile::InitializeFromParent(cmMakefile* parent)
 
   // Imported targets.
   this->ImportedTargets = parent->ImportedTargets;
+
+  // Recursion depth.
+  this->RecursionDepth = parent->RecursionDepth;
 }
 
 void cmMakefile::PushFunctionScope(std::string const& fileName,
@@ -1492,7 +1519,7 @@ void cmMakefile::Configure()
 
   // make sure the CMakeFiles dir is there
   std::string filesDir = this->StateSnapshot.GetDirectory().GetCurrentBinary();
-  filesDir += cmake::GetCMakeFilesDirectory();
+  filesDir += "/CMakeFiles";
   cmSystemTools::MakeDirectory(filesDir);
 
   assert(cmSystemTools::FileExists(currentStart, true));
@@ -1595,7 +1622,7 @@ void cmMakefile::ConfigureSubDirectory(cmMakefile* mf)
   if (this->GetCMakeInstance()->GetDebugOutput()) {
     std::string msg = "   Entering             ";
     msg += currentStart;
-    cmSystemTools::Message(msg.c_str());
+    cmSystemTools::Message(msg);
   }
 
   std::string const currentStartFile = currentStart + "/CMakeLists.txt";
@@ -1638,7 +1665,7 @@ void cmMakefile::ConfigureSubDirectory(cmMakefile* mf)
   if (this->GetCMakeInstance()->GetDebugOutput()) {
     std::string msg = "   Returning to         ";
     msg += this->GetCurrentSourceDirectory();
-    cmSystemTools::Message(msg.c_str());
+    cmSystemTools::Message(msg);
   }
 }
 
@@ -1662,7 +1689,7 @@ void cmMakefile::AddSubDirectory(const std::string& srcPath,
   cmMakefile* subMf = new cmMakefile(this->GlobalGenerator, newSnapshot);
   this->GetGlobalGenerator()->AddMakefile(subMf);
 
-  if (excludeFromAll) {
+  if (excludeFromAll || this->GetPropertyAsBool("EXCLUDE_FROM_ALL")) {
     subMf->SetProperty("EXCLUDE_FROM_ALL", "TRUE");
   }
 
@@ -1958,7 +1985,7 @@ cmTarget* cmMakefile::AddLibrary(const std::string& lname,
   // over changes in CMakeLists.txt, making the information stale and
   // hence useless.
   target->ClearDependencyInformation(*this);
-  if (excludeFromAll) {
+  if (excludeFromAll || this->GetPropertyAsBool("EXCLUDE_FROM_ALL")) {
     target->SetProperty("EXCLUDE_FROM_ALL", "TRUE");
   }
   target->AddSources(srcs);
@@ -1971,7 +1998,7 @@ cmTarget* cmMakefile::AddExecutable(const std::string& exeName,
                                     bool excludeFromAll)
 {
   cmTarget* target = this->AddNewTarget(cmStateEnums::EXECUTABLE, exeName);
-  if (excludeFromAll) {
+  if (excludeFromAll || this->GetPropertyAsBool("EXCLUDE_FROM_ALL")) {
     target->SetProperty("EXCLUDE_FROM_ALL", "TRUE");
   }
   target->AddSources(srcs);
@@ -2099,7 +2126,7 @@ void cmMakefile::AddSourceGroup(const std::vector<std::string>& name,
   if (i == -1) {
     // group does not exist nor belong to any existing group
     // add its first component
-    this->SourceGroups.push_back(cmSourceGroup(name[0], regex));
+    this->SourceGroups.emplace_back(name[0], regex);
     sg = this->GetSourceGroup(currentName);
     i = 0; // last component found
   }
@@ -2711,7 +2738,6 @@ typedef enum
 } t_domain;
 struct t_lookup
 {
-  t_lookup() {}
   t_domain domain = NORMAL;
   size_t loc = 0;
 };
@@ -2720,8 +2746,17 @@ bool cmMakefile::IsProjectFile(const char* filename) const
 {
   return cmSystemTools::IsSubDirectory(filename, this->GetHomeDirectory()) ||
     (cmSystemTools::IsSubDirectory(filename, this->GetHomeOutputDirectory()) &&
-     !cmSystemTools::IsSubDirectory(filename,
-                                    cmake::GetCMakeFilesDirectory()));
+     !cmSystemTools::IsSubDirectory(filename, "/CMakeFiles"));
+}
+
+int cmMakefile::GetRecursionDepth() const
+{
+  return this->RecursionDepth;
+}
+
+void cmMakefile::SetRecursionDepth(int recursionDepth)
+{
+  this->RecursionDepth = recursionDepth;
 }
 
 MessageType cmMakefile::ExpandVariablesInStringNew(
@@ -3387,6 +3422,7 @@ int cmMakefile::TryCompile(const std::string& srcdir,
     this->IsSourceFileTryCompile = false;
     return 1;
   }
+  gg->RecursionDepth = this->RecursionDepth;
   cm.SetGlobalGenerator(gg);
 
   // do a configure
@@ -3405,6 +3441,12 @@ int cmMakefile::TryCompile(const std::string& srcdir,
       cm.AddCacheEntry("CMAKE_BUILD_TYPE", config, "Build configuration",
                        cmStateEnums::STRING);
     }
+  }
+  const char* recursionDepth =
+    this->GetDefinition("CMAKE_MAXIMUM_RECURSION_DEPTH");
+  if (recursionDepth) {
+    cm.AddCacheEntry("CMAKE_MAXIMUM_RECURSION_DEPTH", recursionDepth,
+                     "Maximum recursion depth", cmStateEnums::STRING);
   }
   // if cmake args were provided then pass them in
   if (cmakeArgs) {
@@ -3515,7 +3557,7 @@ void cmMakefile::DisplayStatus(const char* message, float s) const
   cm->UpdateProgress(message, s);
 }
 
-std::string cmMakefile::GetModulesFile(const char* filename,
+std::string cmMakefile::GetModulesFile(const std::string& filename,
                                        bool& system) const
 {
   std::string result;
@@ -3707,8 +3749,7 @@ int cmMakefile::ConfigureFile(const char* infile, const char* outfile,
   }
 
   if (copyonly) {
-    if (!cmSystemTools::CopyFileIfDifferent(sinfile.c_str(),
-                                            soutfile.c_str())) {
+    if (!cmSystemTools::CopyFileIfDifferent(sinfile, soutfile)) {
       return 0;
     }
   } else {
@@ -3759,8 +3800,7 @@ int cmMakefile::ConfigureFile(const char* infile, const char* outfile,
     // close the files before attempting to copy
     fin.close();
     fout.close();
-    if (!cmSystemTools::CopyFileIfDifferent(tempOutputFile.c_str(),
-                                            soutfile.c_str())) {
+    if (!cmSystemTools::CopyFileIfDifferent(tempOutputFile, soutfile)) {
       res = 0;
     } else {
       cmSystemTools::SetPermissions(soutfile, perm);
