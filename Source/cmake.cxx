@@ -1105,7 +1105,7 @@ std::string cmake::FindCacheFile(const std::string& binaryDir)
     if (cmSystemTools::FileExists(cmakeFiles)) {
       std::string cachePathFound =
         cmSystemTools::FileExistsInParentDirectories("CMakeCache.txt",
-                                                     cachePath.c_str(), "/");
+                                                     cachePath, "/");
       if (!cachePathFound.empty()) {
         cachePath = cmSystemTools::GetFilenamePath(cachePathFound);
       }
@@ -1705,7 +1705,7 @@ int cmake::Run(const std::vector<std::string>& args, bool noconfigure)
   ret = this->Generate();
   std::string message = "Build files have been written to: ";
   message += this->GetHomeOutputDirectory();
-  this->UpdateProgress(message.c_str(), -1);
+  this->UpdateProgress(message, -1);
   return ret;
 }
 
@@ -1925,7 +1925,7 @@ void cmake::SetProgressCallback(ProgressCallbackType f)
   this->ProgressCallback = std::move(f);
 }
 
-void cmake::UpdateProgress(const char* msg, float prog)
+void cmake::UpdateProgress(const std::string& msg, float prog)
 {
   if (this->ProgressCallback && !this->State->GetIsInTryCompile()) {
     this->ProgressCallback(msg, prog);
@@ -2354,7 +2354,7 @@ int cmake::GetSystemInformation(std::vector<std::string>& args)
   outFile += "/CMakeLists.txt";
 
   // Copy file
-  if (!cmSystemTools::cmCopyFile(inFile, outFile)) {
+  if (!cmsys::SystemTools::CopyFileAlways(inFile, outFile)) {
     std::cerr << "Error copying file \"" << inFile << "\" to \"" << outFile
               << "\".\n";
     return 1;
@@ -2640,7 +2640,7 @@ int cmake::Build(int jobs, const std::string& dir, const std::string& target,
       }
       std::string message = "Build files have been written to: ";
       message += this->GetHomeOutputDirectory();
-      this->UpdateProgress(message.c_str(), -1);
+      this->UpdateProgress(message, -1);
 
       // Restore the previously set directories to their original value.
       this->SetHomeDirectory(homeOrig);

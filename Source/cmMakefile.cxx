@@ -292,13 +292,14 @@ void cmMakefile::PrintCommandTrace(const cmListFileFunction& lff) const
   std::string const& only_filename = cmSystemTools::GetFilenameName(full_path);
   bool trace = trace_only_this_files.empty();
   if (!trace) {
-    for (std::vector<std::string>::const_iterator i =
-           trace_only_this_files.begin();
-         !trace && i != trace_only_this_files.end(); ++i) {
-      std::string::size_type const pos = full_path.rfind(*i);
+    for (std::string const& file : trace_only_this_files) {
+      std::string::size_type const pos = full_path.rfind(file);
       trace = (pos != std::string::npos) &&
-        ((pos + i->size()) == full_path.size()) &&
-        (only_filename == cmSystemTools::GetFilenameName(*i));
+        ((pos + file.size()) == full_path.size()) &&
+        (only_filename == cmSystemTools::GetFilenameName(file));
+      if (trace) {
+        break;
+      }
     }
     // Do nothing if current file wasn't requested for trace...
     if (!trace) {
@@ -1848,10 +1849,8 @@ void cmMakefile::CheckForUnusedVariables() const
   if (!this->WarnUnused) {
     return;
   }
-  const std::vector<std::string>& unused = this->StateSnapshot.UnusedKeys();
-  std::vector<std::string>::const_iterator it = unused.begin();
-  for (; it != unused.end(); ++it) {
-    this->LogUnused("out of scope", *it);
+  for (const std::string& key : this->StateSnapshot.UnusedKeys()) {
+    this->LogUnused("out of scope", key);
   }
 }
 
@@ -1985,7 +1984,9 @@ cmTarget* cmMakefile::AddLibrary(const std::string& lname,
   // over changes in CMakeLists.txt, making the information stale and
   // hence useless.
   target->ClearDependencyInformation(*this);
-  if (excludeFromAll || this->GetPropertyAsBool("EXCLUDE_FROM_ALL")) {
+  if (excludeFromAll ||
+      (type != cmStateEnums::INTERFACE_LIBRARY &&
+       this->GetPropertyAsBool("EXCLUDE_FROM_ALL"))) {
     target->SetProperty("EXCLUDE_FROM_ALL", "TRUE");
   }
   target->AddSources(srcs);
@@ -2193,7 +2194,7 @@ cmSourceGroup* cmMakefile::FindSourceGroup(
   }
 
   // Shouldn't get here, but just in case, return the default group.
-  return &groups.front();
+  return groups.data();
 }
 #endif
 
@@ -2425,16 +2426,18 @@ bool cmMakefile::CanIWriteThisFile(std::string const& fileName) const
     cmSystemTools::SameFile(fileName, this->GetHomeOutputDirectory());
 }
 
-std::string cmMakefile::GetRequiredDefinition(const std::string& name) const
+const std::string& cmMakefile::GetRequiredDefinition(
+  const std::string& name) const
 {
-  const char* ret = this->GetDefinition(name);
-  if (!ret) {
+  static std::string const empty;
+  const std::string* def = GetDef(name);
+  if (!def) {
     cmSystemTools::Error("Error required internal CMake variable not "
                          "set, cmake may not be built correctly.\n",
                          "Missing variable is:\n", name.c_str());
-    return std::string();
+    return empty;
   }
-  return std::string(ret);
+  return *def;
 }
 
 bool cmMakefile::IsDefinitionSet(const std::string& name) const
@@ -3055,10 +3058,8 @@ bool cmMakefile::IsFunctionBlocked(const cmListFileFunction& lff,
 
   // loop over all function blockers to see if any block this command
   // evaluate in reverse, this is critical for balanced IF statements etc
-  std::vector<cmFunctionBlocker*>::reverse_iterator pos;
-  for (pos = this->FunctionBlockers.rbegin();
-       pos != this->FunctionBlockers.rend(); ++pos) {
-    if ((*pos)->IsFunctionBlocked(lff, *this, status)) {
+  for (cmFunctionBlocker* pos : cmReverseRange(this->FunctionBlockers)) {
+    if (pos->IsFunctionBlocked(lff, *this, status)) {
       return true;
     }
   }
@@ -3546,7 +3547,7 @@ cmState* cmMakefile::GetState() const
   return this->GetCMakeInstance()->GetState();
 }
 
-void cmMakefile::DisplayStatus(const char* message, float s) const
+void cmMakefile::DisplayStatus(const std::string& message, float s) const
 {
   cmake* cm = this->GetCMakeInstance();
   if (cm->GetWorkingMode() == cmake::FIND_PACKAGE_MODE) {

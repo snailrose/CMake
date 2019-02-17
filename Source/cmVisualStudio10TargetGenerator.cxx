@@ -983,7 +983,13 @@ void cmVisualStudio10TargetGenerator::Generate()
   {
     Elem e0(BuildFileStream, "Project");
     e0.Attribute("DefaultTargets", "Build");
-    e0.Attribute("ToolsVersion", this->GlobalGenerator->GetToolsVersion());
+    const char* toolsVersion = this->GlobalGenerator->GetToolsVersion();
+    if (this->GlobalGenerator->GetVersion() ==
+          cmGlobalVisualStudioGenerator::VS12 &&
+        this->GlobalGenerator->TargetsWindowsCE()) {
+      toolsVersion = "4.0";
+    }
+    e0.Attribute("ToolsVersion", toolsVersion);
     e0.Attribute("xmlns",
                  "http://schemas.microsoft.com/developer/msbuild/2003");
 
@@ -3708,18 +3714,19 @@ bool cmVisualStudio10TargetGenerator::ComputeCudaLinkOptions(
 
   // Determine if we need to do a device link
   bool doDeviceLinking = false;
-  switch (this->GeneratorTarget->GetType()) {
-    case cmStateEnums::SHARED_LIBRARY:
-    case cmStateEnums::MODULE_LIBRARY:
-    case cmStateEnums::EXECUTABLE:
-      doDeviceLinking = true;
-      break;
-    case cmStateEnums::STATIC_LIBRARY:
-      doDeviceLinking = this->GeneratorTarget->GetPropertyAsBool(
-        "CUDA_RESOLVE_DEVICE_SYMBOLS");
-      break;
-    default:
-      break;
+  if (const char* resolveDeviceSymbols =
+        this->GeneratorTarget->GetProperty("CUDA_RESOLVE_DEVICE_SYMBOLS")) {
+    doDeviceLinking = cmSystemTools::IsOn(resolveDeviceSymbols);
+  } else {
+    switch (this->GeneratorTarget->GetType()) {
+      case cmStateEnums::SHARED_LIBRARY:
+      case cmStateEnums::MODULE_LIBRARY:
+      case cmStateEnums::EXECUTABLE:
+        doDeviceLinking = true;
+        break;
+      default:
+        break;
+    }
   }
 
   cudaLinkOptions.AddFlag("PerformDeviceLink",
@@ -4148,18 +4155,11 @@ bool cmVisualStudio10TargetGenerator::ComputeLinkOptions(
   linkDirs.push_back("%(AdditionalLibraryDirectories)");
   linkOptions.AddFlag("AdditionalLibraryDirectories", linkDirs);
 
-  std::string targetName;
-  std::string targetNameSO;
-  std::string targetNameFull;
-  std::string targetNameImport;
-  std::string targetNamePDB;
+  cmGeneratorTarget::Names targetNames;
   if (this->GeneratorTarget->GetType() == cmStateEnums::EXECUTABLE) {
-    this->GeneratorTarget->GetExecutableNames(
-      targetName, targetNameFull, targetNameImport, targetNamePDB, config);
+    targetNames = this->GeneratorTarget->GetExecutableNames(config);
   } else {
-    this->GeneratorTarget->GetLibraryNames(targetName, targetNameSO,
-                                           targetNameFull, targetNameImport,
-                                           targetNamePDB, config);
+    targetNames = this->GeneratorTarget->GetLibraryNames(config);
   }
 
   if (this->MSTools) {
@@ -4200,11 +4200,11 @@ bool cmVisualStudio10TargetGenerator::ComputeLinkOptions(
 
     std::string pdb = this->GeneratorTarget->GetPDBDirectory(config);
     pdb += "/";
-    pdb += targetNamePDB;
+    pdb += targetNames.PDB;
     std::string imLib = this->GeneratorTarget->GetDirectory(
       config, cmStateEnums::ImportLibraryArtifact);
     imLib += "/";
-    imLib += targetNameImport;
+    imLib += targetNames.ImportLibrary;
 
     linkOptions.AddFlag("ImportLibrary", imLib);
     linkOptions.AddFlag("ProgramDataBaseFile", pdb);
@@ -4228,7 +4228,7 @@ bool cmVisualStudio10TargetGenerator::ComputeLinkOptions(
       linkOptions.AppendFlag("IgnoreSpecificDefaultLibraries", "ole32.lib");
     }
   } else if (this->NsightTegra) {
-    linkOptions.AddFlag("SoName", targetNameSO);
+    linkOptions.AddFlag("SoName", targetNames.SharedObject);
   }
 
   linkOptions.Parse(flags);
@@ -4604,8 +4604,8 @@ void cmVisualStudio10TargetGenerator::WriteProjectReferences(Elem& e0)
     this->WriteDotNetReferenceCustomTags(e2, name);
 
     // If the dependency target is not managed (compiled with /clr or
-    // C# target) we cannot reference it and have to set
-    // 'ReferenceOutputAssembly' to false.
+    // C# target) and not a WinRT component we cannot reference it and
+    // have to set 'ReferenceOutputAssembly' to false.
     auto referenceNotManaged =
       dt->GetManagedType("") < cmGeneratorTarget::ManagedType::Mixed;
     // Workaround to check for manually set /clr flags.
@@ -4622,6 +4622,12 @@ void cmVisualStudio10TargetGenerator::WriteProjectReferences(Elem& e0)
     if (referenceNotManaged && dt->GetType() == cmStateEnums::STATIC_LIBRARY) {
       referenceNotManaged = !dt->IsCSharpOnly();
     }
+
+    // Referencing WinRT components is okay.
+    if (referenceNotManaged) {
+      referenceNotManaged = !dt->GetPropertyAsBool("VS_WINRT_COMPONENT");
+    }
+
     if (referenceNotManaged) {
       e2.Element("ReferenceOutputAssembly", "false");
       e2.Element("CopyToOutputDirectory", "Never");

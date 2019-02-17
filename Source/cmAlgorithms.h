@@ -172,16 +172,28 @@ struct cmRange
   const_iterator end() const { return End; }
   bool empty() const { return std::distance(Begin, End) == 0; }
   difference_type size() const { return std::distance(Begin, End); }
-  cmRange& advance(KWIML_INT_intptr_t amount)
+
+  cmRange& advance(KWIML_INT_intptr_t amount) &
   {
-    std::advance(Begin, amount);
+    std::advance(this->Begin, amount);
     return *this;
   }
+  cmRange advance(KWIML_INT_intptr_t amount) &&
+  {
+    std::advance(this->Begin, amount);
+    return std::move(*this);
+  }
 
-  cmRange& retreat(KWIML_INT_intptr_t amount)
+  cmRange& retreat(KWIML_INT_intptr_t amount) &
   {
     std::advance(End, -amount);
     return *this;
+  }
+
+  cmRange retreat(KWIML_INT_intptr_t amount) &&
+  {
+    std::advance(End, -amount);
+    return std::move(*this);
   }
 
 private:
@@ -334,6 +346,14 @@ template <class Iter>
 std::reverse_iterator<Iter> cmMakeReverseIterator(Iter it)
 {
   return std::reverse_iterator<Iter>(it);
+}
+
+inline bool cmHasPrefix(std::string const& str, std::string const& prefix)
+{
+  if (str.size() < prefix.size()) {
+    return false;
+  }
+  return str.compare(0, prefix.size(), prefix) == 0;
 }
 
 inline bool cmHasSuffix(const std::string& str, const std::string& suffix)

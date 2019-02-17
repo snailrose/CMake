@@ -678,19 +678,21 @@ void cmQtAutoGeneratorMocUic::JobMocT::Process(WorkerT& wrk)
     BuildFile += '/';
     BuildFile += IncludeString;
   } else {
-    std::string rel = wrk.FileSys().GetFilePathChecksum(SourceFile);
-    rel += "/moc_";
-    rel += wrk.FileSys().GetFilenameWithoutLastExtension(SourceFile);
-    rel += ".cpp";
-    // Register relative file path
-    wrk.Gen().ParallelMocAutoRegister(rel);
+    // Relative build path
+    std::string relPath = wrk.FileSys().GetFilePathChecksum(SourceFile);
+    relPath += "/moc_";
+    relPath += wrk.FileSys().GetFilenameWithoutLastExtension(SourceFile);
+
+    // Register relative file path with duplication check
+    relPath = wrk.Gen().ParallelMocAutoRegister(relPath);
+
     // Absolute build path
     if (wrk.Base().MultiConfig) {
       BuildFile = wrk.Base().AutogenIncludeDir;
       BuildFile += '/';
-      BuildFile += rel;
+      BuildFile += relPath;
     } else {
-      BuildFile = wrk.Base().AbsoluteBuildPath(rel);
+      BuildFile = wrk.Base().AbsoluteBuildPath(relPath);
     }
   }
 
@@ -1018,20 +1020,20 @@ cmQtAutoGeneratorMocUic::WorkerT::~WorkerT()
 void cmQtAutoGeneratorMocUic::WorkerT::LogInfo(
   GeneratorT genType, std::string const& message) const
 {
-  return Log().Info(genType, message);
+  Log().Info(genType, message);
 }
 
 void cmQtAutoGeneratorMocUic::WorkerT::LogWarning(
   GeneratorT genType, std::string const& message) const
 {
-  return Log().Warning(genType, message);
+  Log().Warning(genType, message);
 }
 
 void cmQtAutoGeneratorMocUic::WorkerT::LogFileWarning(
   GeneratorT genType, std::string const& filename,
   std::string const& message) const
 {
-  return Log().WarningFile(genType, filename, message);
+  Log().WarningFile(genType, filename, message);
 }
 
 void cmQtAutoGeneratorMocUic::WorkerT::LogError(
@@ -1953,11 +1955,31 @@ bool cmQtAutoGeneratorMocUic::ParallelMocIncluded(
   return (MocIncludedFiles_.find(sourceFile) != MocIncludedFiles_.end());
 }
 
-void cmQtAutoGeneratorMocUic::ParallelMocAutoRegister(
-  std::string const& mocFile)
+std::string cmQtAutoGeneratorMocUic::ParallelMocAutoRegister(
+  std::string const& baseName)
 {
-  std::lock_guard<std::mutex> mocLock(JobsMutex_);
-  MocAutoFiles_.emplace(mocFile);
+  std::string res;
+  {
+    std::lock_guard<std::mutex> mocLock(JobsMutex_);
+    res = baseName;
+    res += ".cpp";
+    if (MocAutoFiles_.find(res) == MocAutoFiles_.end()) {
+      MocAutoFiles_.emplace(res);
+    } else {
+      // Append number suffix to the file name
+      for (unsigned int ii = 2; ii != 1024; ++ii) {
+        res = baseName;
+        res += '_';
+        res += std::to_string(ii);
+        res += ".cpp";
+        if (MocAutoFiles_.find(res) == MocAutoFiles_.end()) {
+          MocAutoFiles_.emplace(res);
+          break;
+        }
+      }
+    }
+  }
+  return res;
 }
 
 void cmQtAutoGeneratorMocUic::ParallelMocAutoUpdated()

@@ -106,7 +106,7 @@ if(NOT CMAKE_C_COMPILER_ID_RUN)
   #      ...
   #      /path/to/cc ...CompilerIdC/...
   # to extract the compiler front-end for the language.
-  set(CMAKE_C_COMPILER_ID_TOOL_MATCH_REGEX "\nLd[^\n]*(\n[ \t]+[^\n]*)*\n[ \t]+([^ \t\r\n]+)[^\r\n]*-o[^\r\n]*CompilerIdC/(\\./)?(CompilerIdC.xctest/)?CompilerIdC[ \t\n\\\"]")
+  set(CMAKE_C_COMPILER_ID_TOOL_MATCH_REGEX "\nLd[^\n]*(\n[ \t]+[^\n]*)*\n[ \t]+([^ \t\r\n]+)[^\r\n]*-o[^\r\n]*CompilerIdC/(\\./)?(CompilerIdC.(framework|xctest)/)?CompilerIdC[ \t\n\\\"]")
   set(CMAKE_C_COMPILER_ID_TOOL_MATCH_INDEX 2)
 
   include(${CMAKE_ROOT}/Modules/CMakeDetermineCompilerId.cmake)
@@ -139,8 +139,9 @@ if (CMAKE_CROSSCOMPILING  AND NOT _CMAKE_TOOLCHAIN_PREFIX)
 
   if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|QCC")
     get_filename_component(COMPILER_BASENAME "${CMAKE_C_COMPILER}" NAME)
-    if (COMPILER_BASENAME MATCHES "^(.+-)(clang|g?cc)(-[0-9]+\\.[0-9]+\\.[0-9]+)?(\\.exe)?$")
+    if (COMPILER_BASENAME MATCHES "^(.+-)(clang|g?cc)(-[0-9]+(\\.[0-9]+)*)?(-[^.]+)?(\\.exe)?$")
       set(_CMAKE_TOOLCHAIN_PREFIX ${CMAKE_MATCH_1})
+      set(_CMAKE_COMPILER_SUFFIX ${CMAKE_MATCH_5})
     elseif(CMAKE_C_COMPILER_ID MATCHES "Clang")
       if(CMAKE_C_COMPILER_TARGET)
         set(_CMAKE_TOOLCHAIN_PREFIX ${CMAKE_C_COMPILER_TARGET}-)

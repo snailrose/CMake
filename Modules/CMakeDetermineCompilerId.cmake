@@ -332,6 +332,8 @@ Id flags: ${testflags} ${CMAKE_${lang}_COMPILER_ID_FLAGS_ALWAYS}
     if("${lang}" STREQUAL "Swift")
       if(CMAKE_Swift_LANGUAGE_VERSION)
         set(id_lang_version "SWIFT_VERSION = ${CMAKE_Swift_LANGUAGE_VERSION};")
+      elseif(XCODE_VERSION VERSION_GREATER_EQUAL 10.2)
+        set(id_lang_version "SWIFT_VERSION = 4.0;")
       elseif(XCODE_VERSION VERSION_GREATER_EQUAL 8.3)
         set(id_lang_version "SWIFT_VERSION = 3.0;")
       else()
@@ -352,21 +354,20 @@ Id flags: ${testflags} ${CMAKE_${lang}_COMPILER_ID_FLAGS_ALWAYS}
       if(CMAKE_OSX_SYSROOT MATCHES "(^|/)[Ii][Pp][Hh][Oo][Nn][Ee]" OR
         CMAKE_OSX_SYSROOT MATCHES "(^|/)[Aa][Pp][Pp][Ll][Ee][Tt][Vv]")
         set(id_product_type "com.apple.product-type.bundle.unit-test")
+      elseif(CMAKE_OSX_SYSROOT MATCHES "(^|/)[Ww][Aa][Tt][Cc][Hh]")
+        set(id_product_type "com.apple.product-type.framework")
       endif()
     else()
       set(id_sdkroot "")
     endif()
-    if(CMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM)
-      set(id_development_team
-        "DEVELOPMENT_TEAM = \"${CMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM}\";")
-    else()
-      set(id_development_team "")
-    endif()
-    if(DEFINED CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY)
-      set(id_code_sign_identity
-        "CODE_SIGN_IDENTITY = \"${CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY}\";")
-    else()
-      set(id_code_sign_identity "")
+    set(id_clang_cxx_library "")
+    set(stdlib_regex "(^| )(-stdlib=)([^ ]+)( |$)")
+    string(REGEX MATCHALL "${stdlib_regex}" all_stdlib_matches "${CMAKE_CXX_FLAGS}")
+    if(all_stdlib_matches)
+      list(GET all_stdlib_matches "-1" last_stdlib_match)
+      if(last_stdlib_match MATCHES "${stdlib_regex}")
+        set(id_clang_cxx_library "CLANG_CXX_LIBRARY = \"${CMAKE_MATCH_3}\";")
+      endif()
     endif()
     configure_file(${CMAKE_ROOT}/Modules/CompilerId/Xcode-3.pbxproj.in
       ${id_dir}/CompilerId${lang}.xcodeproj/project.pbxproj @ONLY)
@@ -491,6 +492,9 @@ ${CMAKE_${lang}_COMPILER_ID_OUTPUT}
 
       # com.apple.package-type.bundle.unit-test
       ${_glob_id_dir}/*.xctest/*
+
+      # com.apple.product-type.framework
+      ${_glob_id_dir}/*.framework/*
       )
     list(REMOVE_ITEM files "${src}")
     set(COMPILER_${lang}_PRODUCED_FILES "")

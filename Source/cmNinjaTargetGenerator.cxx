@@ -454,6 +454,7 @@ void cmNinjaTargetGenerator::WriteCompileRule(const std::string& lang)
   if (lang == "Swift") {
     vars.SwiftAuxiliarySources = "$SWIFT_AUXILIARY_SOURCES";
     vars.SwiftModuleName = "$SWIFT_MODULE_NAME";
+    vars.SwiftLibraryName = "$SWIFT_LIBRARY_NAME";
   }
 
   // For some cases we do an explicit preprocessor invocation.
@@ -493,7 +494,7 @@ void cmNinjaTargetGenerator::WriteCompileRule(const std::string& lang)
   if (explicitPP) {
     // Lookup the explicit preprocessing rule.
     std::string const ppVar = "CMAKE_" + lang + "_PREPROCESS_SOURCE";
-    std::string const ppCmd =
+    std::string const& ppCmd =
       this->GetMakefile()->GetRequiredDefinition(ppVar);
 
     // Explicit preprocessing always uses a depfile.
@@ -671,19 +672,18 @@ void cmNinjaTargetGenerator::WriteCompileRule(const std::string& lang)
     std::string cmdVar;
     if (this->GeneratorTarget->GetPropertyAsBool(
           "CUDA_SEPARABLE_COMPILATION")) {
-      cmdVar = std::string("CMAKE_CUDA_COMPILE_SEPARABLE_COMPILATION");
+      cmdVar = "CMAKE_CUDA_COMPILE_SEPARABLE_COMPILATION";
     } else if (this->GeneratorTarget->GetPropertyAsBool(
                  "CUDA_PTX_COMPILATION")) {
-      cmdVar = std::string("CMAKE_CUDA_COMPILE_PTX_COMPILATION");
+      cmdVar = "CMAKE_CUDA_COMPILE_PTX_COMPILATION";
     } else {
-      cmdVar = std::string("CMAKE_CUDA_COMPILE_WHOLE_COMPILATION");
+      cmdVar = "CMAKE_CUDA_COMPILE_WHOLE_COMPILATION";
     }
-    std::string compileCmd = mf->GetRequiredDefinition(cmdVar);
+    const std::string& compileCmd = mf->GetRequiredDefinition(cmdVar);
     cmSystemTools::ExpandListArgument(compileCmd, compileCmds);
   } else {
-    const std::string cmdVar =
-      std::string("CMAKE_") + lang + "_COMPILE_OBJECT";
-    std::string compileCmd = mf->GetRequiredDefinition(cmdVar);
+    const std::string cmdVar = "CMAKE_" + lang + "_COMPILE_OBJECT";
+    const std::string& compileCmd = mf->GetRequiredDefinition(cmdVar);
     cmSystemTools::ExpandListArgument(compileCmd, compileCmds);
   }
 
@@ -941,6 +941,10 @@ void cmNinjaTargetGenerator::WriteObjectBuildStatement(
     } else {
       vars["SWIFT_MODULE_NAME"] = this->GeneratorTarget->GetName();
     }
+
+    cmGeneratorTarget::Names targetNames =
+      this->GeneratorTarget->GetLibraryNames(this->GetConfigName());
+    vars["SWIFT_LIBRARY_NAME"] = targetNames.Base;
   }
 
   if (!this->NeedDepTypeMSVC(language)) {
@@ -1000,7 +1004,7 @@ void cmNinjaTargetGenerator::WriteObjectBuildStatement(
   // (either attached to this source file or another one), assume that one of
   // the target dependencies, OBJECT_DEPENDS or header file custom commands
   // will rebuild the file.
-  if (source->GetPropertyAsBool("GENERATED") &&
+  if (source->GetIsGenerated() &&
       !source->GetPropertyAsBool("__CMAKE_GENERATED_BY_CMAKE") &&
       !source->GetCustomCommand() &&
       !this->GetGlobalGenerator()->HasCustomCommandOutput(sourceFileName)) {
@@ -1144,6 +1148,10 @@ void cmNinjaTargetGenerator::WriteTargetDependInfo(std::string const& lang)
       mod_dir = this->Makefile->GetCurrentBinaryDirectory();
     }
     tdi["module-dir"] = mod_dir;
+    tdi["submodule-sep"] =
+      this->Makefile->GetSafeDefinition("CMAKE_Fortran_SUBMODULE_SEP");
+    tdi["submodule-ext"] =
+      this->Makefile->GetSafeDefinition("CMAKE_Fortran_SUBMODULE_EXT");
   }
 
   tdi["dir-cur-bld"] = this->Makefile->GetCurrentBinaryDirectory();
@@ -1213,20 +1221,19 @@ void cmNinjaTargetGenerator::ExportObjectCompileCommand(
     std::string cmdVar;
     if (this->GeneratorTarget->GetPropertyAsBool(
           "CUDA_SEPARABLE_COMPILATION")) {
-      cmdVar = std::string("CMAKE_CUDA_COMPILE_SEPARABLE_COMPILATION");
+      cmdVar = "CMAKE_CUDA_COMPILE_SEPARABLE_COMPILATION";
     } else if (this->GeneratorTarget->GetPropertyAsBool(
                  "CUDA_PTX_COMPILATION")) {
-      cmdVar = std::string("CMAKE_CUDA_COMPILE_PTX_COMPILATION");
+      cmdVar = "CMAKE_CUDA_COMPILE_PTX_COMPILATION";
     } else {
-      cmdVar = std::string("CMAKE_CUDA_COMPILE_WHOLE_COMPILATION");
+      cmdVar = "CMAKE_CUDA_COMPILE_WHOLE_COMPILATION";
     }
-    std::string compileCmd =
+    const std::string& compileCmd =
       this->GetMakefile()->GetRequiredDefinition(cmdVar);
     cmSystemTools::ExpandListArgument(compileCmd, compileCmds);
   } else {
-    const std::string cmdVar =
-      std::string("CMAKE_") + language + "_COMPILE_OBJECT";
-    std::string compileCmd =
+    const std::string cmdVar = "CMAKE_" + language + "_COMPILE_OBJECT";
+    const std::string& compileCmd =
       this->GetMakefile()->GetRequiredDefinition(cmdVar);
     cmSystemTools::ExpandListArgument(compileCmd, compileCmds);
   }

@@ -323,16 +323,16 @@ void cmSystemTools::Stdout(const std::string& s)
   }
 }
 
-void cmSystemTools::Message(const char* m1, const char* title)
+void cmSystemTools::Message(const std::string& m, const char* title)
 {
   if (s_DisableMessages) {
     return;
   }
   if (s_MessageCallback) {
-    s_MessageCallback(m1, title);
+    s_MessageCallback(m, title);
     return;
   }
-  std::cerr << m1 << std::endl << std::flush;
+  std::cerr << m << std::endl << std::flush;
 }
 
 void cmSystemTools::ReportLastSystemError(const char* msg)
@@ -542,8 +542,7 @@ std::vector<std::string> cmSystemTools::HandleResponseFile(
   std::vector<std::string>::const_iterator argEnd)
 {
   std::vector<std::string> arg_full;
-  for (std::vector<std::string>::const_iterator a = argBeg; a != argEnd; ++a) {
-    std::string const& arg = *a;
+  for (std::string const& arg : cmMakeRange(argBeg, argEnd)) {
     if (cmHasLiteralPrefix(arg, "@")) {
       cmsys::ifstream responseFile(arg.substr(1).c_str(), std::ios::in);
       if (!responseFile) {
@@ -740,7 +739,7 @@ bool cmSystemTools::RunSingleCommand(std::vector<std::string> const& command,
   argv.push_back(nullptr);
 
   cmsysProcess* cp = cmsysProcess_New();
-  cmsysProcess_SetCommand(cp, &*argv.begin());
+  cmsysProcess_SetCommand(cp, argv.data());
   cmsysProcess_SetWorkingDirectory(cp, dir);
   if (cmSystemTools::GetRunCommandHideConsole()) {
     cmsysProcess_SetOption(cp, cmsysProcess_Option_HideWindow, 1);
@@ -867,7 +866,7 @@ bool cmSystemTools::RunSingleCommand(std::vector<std::string> const& command,
   return result;
 }
 
-bool cmSystemTools::RunSingleCommand(const char* command,
+bool cmSystemTools::RunSingleCommand(const std::string& command,
                                      std::string* captureStdOut,
                                      std::string* captureStdErr, int* retVal,
                                      const char* dir, OutputOption outputflag,
@@ -877,7 +876,8 @@ bool cmSystemTools::RunSingleCommand(const char* command,
     outputflag = OUTPUT_NONE;
   }
 
-  std::vector<std::string> args = cmSystemTools::ParseArguments(command);
+  std::vector<std::string> args =
+    cmSystemTools::ParseArguments(command.c_str());
 
   if (args.empty()) {
     return false;
@@ -897,7 +897,7 @@ std::string cmSystemTools::PrintSingleCommand(
 }
 
 bool cmSystemTools::DoesFileExistWithExtensions(
-  const char* name, const std::vector<std::string>& headerExts)
+  const std::string& name, const std::vector<std::string>& headerExts)
 {
   std::string hname;
 
@@ -912,9 +912,9 @@ bool cmSystemTools::DoesFileExistWithExtensions(
   return false;
 }
 
-std::string cmSystemTools::FileExistsInParentDirectories(const char* fname,
-                                                         const char* directory,
-                                                         const char* toplevel)
+std::string cmSystemTools::FileExistsInParentDirectories(
+  const std::string& fname, const std::string& directory,
+  const std::string& toplevel)
 {
   std::string file = fname;
   cmSystemTools::ConvertToUnixSlashes(file);
@@ -926,19 +926,13 @@ std::string cmSystemTools::FileExistsInParentDirectories(const char* fname,
     if (cmSystemTools::FileExists(path)) {
       return path;
     }
-    if (dir.size() < strlen(toplevel)) {
+    if (dir.size() < toplevel.size()) {
       break;
     }
     prevDir = dir;
     dir = cmSystemTools::GetParentDirectory(dir);
   }
   return "";
-}
-
-bool cmSystemTools::cmCopyFile(const std::string& source,
-                               const std::string& destination)
-{
-  return Superclass::CopyFileAlways(source, destination);
 }
 
 #ifdef _WIN32
@@ -1219,9 +1213,8 @@ void cmSystemTools::GlobDirs(const std::string& path,
 void cmSystemTools::ExpandList(std::vector<std::string> const& arguments,
                                std::vector<std::string>& newargs)
 {
-  std::vector<std::string>::const_iterator i;
-  for (i = arguments.begin(); i != arguments.end(); ++i) {
-    cmSystemTools::ExpandListArgument(*i, newargs);
+  for (std::string const& arg : arguments) {
+    cmSystemTools::ExpandListArgument(arg, newargs);
   }
 }
 
@@ -1330,13 +1323,11 @@ bool cmSystemTools::SimpleGlob(const std::string& glob,
   return res;
 }
 
-cmSystemTools::FileFormat cmSystemTools::GetFileFormat(const char* cext)
+cmSystemTools::FileFormat cmSystemTools::GetFileFormat(std::string const& ext)
 {
-  if (!cext || *cext == 0) {
+  if (ext.empty()) {
     return cmSystemTools::NO_FILE_FORMAT;
   }
-  // std::string ext = cmSystemTools::LowerCase(cext);
-  std::string ext = cext;
   if (ext == "c" || ext == ".c" || ext == "m" || ext == ".m") {
     return cmSystemTools::C_FILE_FORMAT;
   }
@@ -1389,14 +1380,6 @@ cmSystemTools::FileFormat cmSystemTools::GetFileFormat(const char* cext)
   }
 #endif // __APPLE__
   return cmSystemTools::UNKNOWN_FILE_FORMAT;
-}
-
-bool cmSystemTools::Split(const char* s, std::vector<std::string>& l)
-{
-  std::vector<std::string> temp;
-  bool res = Superclass::Split(s, temp);
-  l.insert(l.end(), temp.begin(), temp.end());
-  return res;
 }
 
 std::string cmSystemTools::ConvertToOutputPath(std::string const& path)
@@ -2084,7 +2067,8 @@ void cmSystemTools::DoNotInheritStdPipes()
 #endif
 }
 
-bool cmSystemTools::CopyFileTime(const char* fromFile, const char* toFile)
+bool cmSystemTools::CopyFileTime(const std::string& fromFile,
+                                 const std::string& toFile)
 {
 #if defined(_WIN32) && !defined(__CYGWIN__)
   cmSystemToolsWindowsHandle hFrom = CreateFileW(
@@ -2105,14 +2089,14 @@ bool cmSystemTools::CopyFileTime(const char* fromFile, const char* toFile)
   return SetFileTime(hTo, &timeCreation, &timeLastAccess, &timeLastWrite) != 0;
 #else
   struct stat fromStat;
-  if (stat(fromFile, &fromStat) < 0) {
+  if (stat(fromFile.c_str(), &fromStat) < 0) {
     return false;
   }
 
   struct utimbuf buf;
   buf.actime = fromStat.st_atime;
   buf.modtime = fromStat.st_mtime;
-  return utime(toFile, &buf) >= 0;
+  return utime(toFile.c_str(), &buf) >= 0;
 #endif
 }
 
@@ -2126,7 +2110,8 @@ void cmSystemTools::FileTimeDelete(cmSystemToolsFileTime* t)
   delete t;
 }
 
-bool cmSystemTools::FileTimeGet(const char* fname, cmSystemToolsFileTime* t)
+bool cmSystemTools::FileTimeGet(const std::string& fname,
+                                cmSystemToolsFileTime* t)
 {
 #if defined(_WIN32) && !defined(__CYGWIN__)
   cmSystemToolsWindowsHandle h = CreateFileW(
@@ -2141,7 +2126,7 @@ bool cmSystemTools::FileTimeGet(const char* fname, cmSystemToolsFileTime* t)
   }
 #else
   struct stat st;
-  if (stat(fname, &st) < 0) {
+  if (stat(fname.c_str(), &st) < 0) {
     return false;
   }
   t->timeBuf.actime = st.st_atime;
@@ -2150,7 +2135,8 @@ bool cmSystemTools::FileTimeGet(const char* fname, cmSystemToolsFileTime* t)
   return true;
 }
 
-bool cmSystemTools::FileTimeSet(const char* fname, cmSystemToolsFileTime* t)
+bool cmSystemTools::FileTimeSet(const std::string& fname,
+                                const cmSystemToolsFileTime* t)
 {
 #if defined(_WIN32) && !defined(__CYGWIN__)
   cmSystemToolsWindowsHandle h = CreateFileW(
@@ -2162,7 +2148,7 @@ bool cmSystemTools::FileTimeSet(const char* fname, cmSystemToolsFileTime* t)
   return SetFileTime(h, &t->timeCreation, &t->timeLastAccess,
                      &t->timeLastWrite) != 0;
 #else
-  return utime(fname, &t->timeBuf) >= 0;
+  return utime(fname.c_str(), &t->timeBuf) >= 0;
 #endif
 }
 

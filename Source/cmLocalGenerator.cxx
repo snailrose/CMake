@@ -935,15 +935,10 @@ std::vector<BT<std::string>> cmLocalGenerator::GetIncludeDirectoriesImplicit(
     } else {
       rootPath = this->Makefile->GetSafeDefinition("CMAKE_SYSROOT");
     }
+    cmSystemTools::ConvertToUnixSlashes(rootPath);
 
     // Raw list of implicit include directories
     std::vector<std::string> impDirVec;
-
-    // Get platform-wide implicit directories.
-    if (const char* implicitIncludes = (this->Makefile->GetDefinition(
-          "CMAKE_PLATFORM_IMPLICIT_INCLUDE_DIRECTORIES"))) {
-      cmSystemTools::ExpandListArgument(implicitIncludes, impDirVec);
-    }
 
     // Load implicit include directories for this language.
     std::string key = "CMAKE_";
@@ -953,9 +948,28 @@ std::vector<BT<std::string>> cmLocalGenerator::GetIncludeDirectoriesImplicit(
       cmSystemTools::ExpandListArgument(value, impDirVec);
     }
 
+    // The Platform/UnixPaths module used to hard-code /usr/include for C, CXX,
+    // and CUDA in CMAKE_<LANG>_IMPLICIT_INCLUDE_DIRECTORIES, but those
+    // variables are now computed.  On macOS the /usr/include directory is
+    // inside the platform SDK so the computed value does not contain it
+    // directly.  In this case adding -I/usr/include can hide SDK headers so we
+    // must still exclude it.
+    if ((lang == "C" || lang == "CXX" || lang == "CUDA") &&
+        std::find(impDirVec.begin(), impDirVec.end(), "/usr/include") ==
+          impDirVec.end() &&
+        std::find_if(impDirVec.begin(), impDirVec.end(),
+                     [](std::string const& d) {
+                       return cmHasLiteralSuffix(d, "/usr/include");
+                     }) != impDirVec.end()) {
+      impDirVec.emplace_back("/usr/include");
+    }
+
     for (std::string const& i : impDirVec) {
-      std::string imd = rootPath + i;
+      std::string imd = i;
       cmSystemTools::ConvertToUnixSlashes(imd);
+      if (!rootPath.empty() && !cmHasPrefix(imd, rootPath)) {
+        imd = rootPath + imd;
+      }
       if (implicitSet.insert(imd).second) {
         implicitDirs.emplace_back(std::move(imd));
       }
@@ -1364,9 +1378,9 @@ void cmLocalGenerator::OutputLinkLibraries(
 
   std::string linkLanguage = cli.GetLinkLanguage();
 
-  std::string libPathFlag =
+  const std::string& libPathFlag =
     this->Makefile->GetRequiredDefinition("CMAKE_LIBRARY_PATH_FLAG");
-  std::string libPathTerminator =
+  const std::string& libPathTerminator =
     this->Makefile->GetSafeDefinition("CMAKE_LIBRARY_PATH_TERMINATOR");
 
   // Add standard libraries for this language.
@@ -2223,11 +2237,8 @@ void cmLocalGenerator::JoinDefines(const std::set<std::string>& defines,
       dflag = df;
     }
   }
-
-  std::set<std::string>::const_iterator defineIt = defines.begin();
-  const std::set<std::string>::const_iterator defineEnd = defines.end();
   const char* itemSeparator = definesString.empty() ? "" : " ";
-  for (; defineIt != defineEnd; ++defineIt) {
+  for (std::string const& define : defines) {
     // Append the definition with proper escaping.
     std::string def = dflag;
     if (this->GetState()->UseWatcomWMake()) {
@@ -2241,7 +2252,7 @@ void cmLocalGenerator::JoinDefines(const std::set<std::string>& defines,
       // command line without any escapes.  However we still have to
       // get the '$' and '#' characters through WMake as '$$' and
       // '$#'.
-      for (const char* c = defineIt->c_str(); *c; ++c) {
+      for (const char* c = define.c_str(); *c; ++c) {
         if (*c == '$' || *c == '#') {
           def += '$';
         }
@@ -2250,11 +2261,11 @@ void cmLocalGenerator::JoinDefines(const std::set<std::string>& defines,
     } else {
       // Make the definition appear properly on the command line.  Use
       // -DNAME="value" instead of -D"NAME=value" for historical reasons.
-      std::string::size_type eq = defineIt->find("=");
-      def += defineIt->substr(0, eq);
+      std::string::size_type eq = define.find('=');
+      def += define.substr(0, eq);
       if (eq != std::string::npos) {
         def += "=";
-        def += this->EscapeForShell(defineIt->c_str() + eq + 1, true);
+        def += this->EscapeForShell(define.c_str() + eq + 1, true);
       }
     }
     definesString += itemSeparator;

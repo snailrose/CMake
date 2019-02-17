@@ -2254,6 +2254,22 @@ void cmGlobalXCodeGenerator::CreateBuildSettings(cmGeneratorTarget* gtgt,
     debugStr = "NO";
   }
 
+  // extract C++ stdlib
+  for (auto const& language : languages) {
+    if (language != "CXX") {
+      continue;
+    }
+    std::string& flags = cflags[language];
+
+    auto stdlib =
+      this->ExtractFlagRegex("(^| )(-stdlib=[^ ]+)( |$)", 2, flags);
+    if (stdlib.size() > 8) {
+      const auto cxxLibrary = stdlib.substr(8);
+      buildSettings->AddAttribute("CLANG_CXX_LIBRARY",
+                                  this->CreateString(cxxLibrary));
+    }
+  }
+
   buildSettings->AddAttribute("COMBINE_HIDPI_IMAGES",
                               this->CreateString("YES"));
   buildSettings->AddAttribute("GCC_GENERATE_DEBUGGING_SYMBOLS",
@@ -2460,7 +2476,7 @@ cmXCodeObject* cmGlobalXCodeGenerator::CreateUtilityTarget(
     this->AddXCodeProjBuildRule(gtgt, sources);
 
     for (auto sourceFile : sources) {
-      if (!sourceFile->GetPropertyAsBool("GENERATED")) {
+      if (!sourceFile->GetIsGenerated()) {
         this->CreateXCodeFileReference(sourceFile, gtgt);
       }
     }
@@ -3142,6 +3158,8 @@ bool cmGlobalXCodeGenerator::CreateXCodeObjects(
     if (const char* vers = this->CurrentMakefile->GetDefinition(
           "CMAKE_Swift_LANGUAGE_VERSION")) {
       swiftVersion = vers;
+    } else if (this->XcodeVersion >= 102) {
+      swiftVersion = "4.0";
     } else if (this->XcodeVersion >= 83) {
       swiftVersion = "3.0";
     } else {
