@@ -217,7 +217,7 @@ cmGlobalGenerator* cmGlobalXCodeGenerator::Factory::CreateGlobalGenerator(
   sscanf(version_string.c_str(), "%u.%u", &v[0], &v[1]);
   unsigned int version_number = 10 * v[0] + v[1];
 
-  if (version_number < 30) {
+  if (version_number < 50) {
     cm->IssueMessage(MessageType::FATAL_ERROR,
                      "Xcode " + version_string + " not supported.");
     return nullptr;
@@ -256,15 +256,11 @@ std::string const& cmGlobalXCodeGenerator::GetXcodeBuildCommand()
 
 std::string cmGlobalXCodeGenerator::FindXcodeBuildCommand()
 {
-  if (this->XcodeVersion >= 40) {
-    std::string makeProgram = cmSystemTools::FindProgram("xcodebuild");
-    if (makeProgram.empty()) {
-      makeProgram = "xcodebuild";
-    }
-    return makeProgram;
+  std::string makeProgram = cmSystemTools::FindProgram("xcodebuild");
+  if (makeProgram.empty()) {
+    makeProgram = "xcodebuild";
   }
-  // Use cmakexbuild wrapper to suppress environment dump from output.
-  return cmSystemTools::GetCMakeCommand() + "xbuild";
+  return makeProgram;
 }
 
 bool cmGlobalXCodeGenerator::SetGeneratorToolset(std::string const& ts,
@@ -338,46 +334,58 @@ bool cmGlobalXCodeGenerator::Open(const std::string& bindir,
   return ret;
 }
 
-void cmGlobalXCodeGenerator::GenerateBuildCommand(
-  GeneratedMakeCommand& makeCommand, const std::string& makeProgram,
-  const std::string& projectName, const std::string& /*projectDir*/,
-  const std::string& targetName, const std::string& config, bool /*fast*/,
-  int jobs, bool /*verbose*/, std::vector<std::string> const& makeOptions)
+std::vector<cmGlobalGenerator::GeneratedMakeCommand>
+cmGlobalXCodeGenerator::GenerateBuildCommand(
+  const std::string& makeProgram, const std::string& projectName,
+  const std::string& /*projectDir*/,
+  std::vector<std::string> const& targetNames, const std::string& config,
+  bool /*fast*/, int jobs, bool /*verbose*/,
+  std::vector<std::string> const& makeOptions)
 {
+  GeneratedMakeCommand makeCommand;
   // now build the test
-  makeCommand.add(
+  makeCommand.Add(
     this->SelectMakeProgram(makeProgram, this->GetXcodeBuildCommand()));
 
   if (!projectName.empty()) {
-    makeCommand.add("-project");
+    makeCommand.Add("-project");
     std::string projectArg = projectName;
     projectArg += ".xcode";
     projectArg += "proj";
-    makeCommand.add(projectArg);
+    makeCommand.Add(projectArg);
+  }
+  if (std::find(targetNames.begin(), targetNames.end(), "clean") !=
+      targetNames.end()) {
+    makeCommand.Add("clean");
+    makeCommand.Add("-target", "ALL_BUILD");
+  } else {
+    makeCommand.Add("build");
+    if (targetNames.empty() ||
+        ((targetNames.size() == 1) && targetNames.front().empty())) {
+      makeCommand.Add("-target", "ALL_BUILD");
+    } else {
+      for (const auto& tname : targetNames) {
+        if (!tname.empty()) {
+          makeCommand.Add("-target", tname);
+        }
+      }
+    }
   }
 
-  bool clean = false;
-  std::string realTarget = targetName;
-  if (realTarget == "clean") {
-    clean = true;
-    realTarget = "ALL_BUILD";
-  }
-
-  makeCommand.add((clean ? "clean" : "build"));
-  makeCommand.add("-target", (realTarget.empty() ? "ALL_BUILD" : realTarget));
-  makeCommand.add("-configuration", (config.empty() ? "Debug" : config));
+  makeCommand.Add("-configuration", (config.empty() ? "Debug" : config));
 
   if (jobs != cmake::NO_BUILD_PARALLEL_LEVEL) {
-    makeCommand.add("-jobs");
+    makeCommand.Add("-jobs");
     if (jobs != cmake::DEFAULT_BUILD_PARALLEL_LEVEL) {
-      makeCommand.add(std::to_string(jobs));
+      makeCommand.Add(std::to_string(jobs));
     }
   }
 
   if (this->XcodeVersion >= 70) {
-    makeCommand.add("-hideShellScriptEnvironment");
+    makeCommand.Add("-hideShellScriptEnvironment");
   }
-  makeCommand.add(makeOptions.begin(), makeOptions.end());
+  makeCommand.Add(makeOptions.begin(), makeOptions.end());
+  return { std::move(makeCommand) };
 }
 
 ///! Create a local generator appropriate to this Global Generator
@@ -550,12 +558,7 @@ void cmGlobalXCodeGenerator::AddExtraTargets(
       // run the depend check makefile as a post build rule
       // this will make sure that when the next target is built
       // things are up-to-date
-      if (target->GetType() == cmStateEnums::OBJECT_LIBRARY ||
-          (this->XcodeVersion < 50 &&
-           (target->GetType() == cmStateEnums::EXECUTABLE ||
-            target->GetType() == cmStateEnums::STATIC_LIBRARY ||
-            target->GetType() == cmStateEnums::SHARED_LIBRARY ||
-            target->GetType() == cmStateEnums::MODULE_LIBRARY))) {
+      if (target->GetType() == cmStateEnums::OBJECT_LIBRARY) {
         makeHelper.back() = // fill placeholder
           this->PostBuildMakeTarget(target->GetName(), "$(CONFIGURATION)");
         cmCustomCommandLines commandLines;
@@ -1180,23 +1183,6 @@ bool cmGlobalXCodeGenerator::CreateXCodeTarget(
           !this->IgnoreFile(sourceFile->GetExtension().c_str())) {
         sourceFiles.push_back(xsf);
       }
-    }
-  }
-
-  if (this->XcodeVersion < 50) {
-    // Add object library contents as external objects. (Equivalent to
-    // the externalObjFiles above, except each one is not a cmSourceFile
-    // within the target.)
-    std::vector<cmSourceFile const*> objs;
-    gtgt->GetExternalObjects(objs, "");
-    for (auto sourceFile : objs) {
-      if (sourceFile->GetObjectLibrary().empty()) {
-        continue;
-      }
-      std::string const& obj = sourceFile->GetFullPath();
-      cmXCodeObject* xsf =
-        this->CreateXCodeSourceFileFromPath(obj, gtgt, "", nullptr);
-      externalObjFiles.push_back(xsf);
     }
   }
 
@@ -2002,7 +1988,7 @@ void cmGlobalXCodeGenerator::CreateBuildSettings(cmGeneratorTarget* gtgt,
         // so let it replace the framework name. This avoids creating
         // a per-configuration Info.plist file.
         this->CurrentLocalGenerator->GenerateFrameworkInfoPList(
-          gtgt, "$(EXECUTABLE_NAME)", plist.c_str());
+          gtgt, "$(EXECUTABLE_NAME)", plist);
         buildSettings->AddAttribute("INFOPLIST_FILE",
                                     this->CreateString(plist));
         buildSettings->AddAttribute("MACH_O_TYPE",
@@ -2043,7 +2029,7 @@ void cmGlobalXCodeGenerator::CreateBuildSettings(cmGeneratorTarget* gtgt,
         // a per-configuration Info.plist file. The cfbundle plist
         // is very similar to the application bundle plist
         this->CurrentLocalGenerator->GenerateAppleInfoPList(
-          gtgt, "$(EXECUTABLE_NAME)", plist.c_str());
+          gtgt, "$(EXECUTABLE_NAME)", plist);
         buildSettings->AddAttribute("INFOPLIST_FILE",
                                     this->CreateString(plist));
       } else {
@@ -2077,7 +2063,7 @@ void cmGlobalXCodeGenerator::CreateBuildSettings(cmGeneratorTarget* gtgt,
         // so let it replace the framework name. This avoids creating
         // a per-configuration Info.plist file.
         this->CurrentLocalGenerator->GenerateFrameworkInfoPList(
-          gtgt, "$(EXECUTABLE_NAME)", plist.c_str());
+          gtgt, "$(EXECUTABLE_NAME)", plist);
         buildSettings->AddAttribute("INFOPLIST_FILE",
                                     this->CreateString(plist));
       } else {
@@ -2115,16 +2101,13 @@ void cmGlobalXCodeGenerator::CreateBuildSettings(cmGeneratorTarget* gtgt,
         // so let it replace the executable name.  This avoids creating
         // a per-configuration Info.plist file.
         this->CurrentLocalGenerator->GenerateAppleInfoPList(
-          gtgt, "$(EXECUTABLE_NAME)", plist.c_str());
+          gtgt, "$(EXECUTABLE_NAME)", plist);
         buildSettings->AddAttribute("INFOPLIST_FILE",
                                     this->CreateString(plist));
       }
     } break;
     default:
       break;
-  }
-  if (this->XcodeVersion < 40) {
-    buildSettings->AddAttribute("PREBINDING", this->CreateString("NO"));
   }
 
   BuildObjectListOrString dirs(this, true);
@@ -2775,8 +2758,7 @@ void cmGlobalXCodeGenerator::AddDependAndLinkInformation(cmXCodeObject* target)
 
   // Loop over configuration types and set per-configuration info.
   for (auto const& configName : this->CurrentConfigurationTypes) {
-    // Get the current configuration name.
-    if (this->XcodeVersion >= 50) {
+    {
       // Add object library contents as link flags.
       std::string linkObjs;
       const char* sep = "";
@@ -2886,7 +2868,7 @@ bool cmGlobalXCodeGenerator::CreateGroups(
       // Put cmSourceFile instances in proper groups:
       for (auto const& si : gtgt->GetAllConfigSources()) {
         cmSourceFile const* sf = si.Source;
-        if (this->XcodeVersion >= 50 && !sf->GetObjectLibrary().empty()) {
+        if (!sf->GetObjectLibrary().empty()) {
           // Object library files go on the link line instead.
           continue;
         }
@@ -3076,16 +3058,8 @@ bool cmGlobalXCodeGenerator::CreateXCodeObjects(
   v << std::setfill('0') << std::setw(4) << XcodeVersion * 10;
   group->AddAttribute("LastUpgradeCheck", this->CreateString(v.str()));
   this->RootObject->AddAttribute("attributes", group);
-  if (this->XcodeVersion >= 32) {
-    this->RootObject->AddAttribute("compatibilityVersion",
-                                   this->CreateString("Xcode 3.2"));
-  } else if (this->XcodeVersion >= 31) {
-    this->RootObject->AddAttribute("compatibilityVersion",
-                                   this->CreateString("Xcode 3.1"));
-  } else {
-    this->RootObject->AddAttribute("compatibilityVersion",
-                                   this->CreateString("Xcode 3.0"));
-  }
+  this->RootObject->AddAttribute("compatibilityVersion",
+                                 this->CreateString("Xcode 3.2"));
   // Point Xcode at the top of the source tree.
   {
     std::string pdir =
@@ -3540,13 +3514,7 @@ void cmGlobalXCodeGenerator::WriteXCodePBXProj(std::ostream& fout,
   cmXCodeObject::Indent(1, fout);
   fout << "};\n";
   cmXCodeObject::Indent(1, fout);
-  if (this->XcodeVersion >= 32) {
-    fout << "objectVersion = 46;\n";
-  } else if (this->XcodeVersion >= 31) {
-    fout << "objectVersion = 45;\n";
-  } else {
-    fout << "objectVersion = 44;\n";
-  }
+  fout << "objectVersion = 46;\n";
   cmXCode21Object::PrintList(this->XCodeObjects, fout);
   cmXCodeObject::Indent(1, fout);
   fout << "rootObject = " << this->RootObject->GetId()
@@ -3714,11 +3682,7 @@ void cmGlobalXCodeGenerator::AppendFlag(std::string& flags,
   // Flag value with escaped quotes and backslashes.
   for (auto c : flag) {
     if (c == '\'') {
-      if (this->XcodeVersion >= 40) {
-        flags += "'\\''";
-      } else {
-        flags += "\\'";
-      }
+      flags += "'\\''";
     } else if (c == '\\') {
       flags += "\\\\";
     } else {

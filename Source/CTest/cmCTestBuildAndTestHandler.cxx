@@ -140,6 +140,11 @@ public:
     cmSystemTools::SetStdoutCallback(nullptr);
     cmSystemTools::SetMessageCallback(nullptr);
   }
+
+  cmCTestBuildAndTestCaptureRAII(const cmCTestBuildAndTestCaptureRAII&) =
+    delete;
+  cmCTestBuildAndTestCaptureRAII& operator=(
+    const cmCTestBuildAndTestCaptureRAII&) = delete;
 };
 
 int cmCTestBuildAndTestHandler::RunCMakeAndTest(std::string* outstring)
@@ -251,7 +256,7 @@ int cmCTestBuildAndTestHandler::RunCMakeAndTest(std::string* outstring)
     }
     int retVal = cm.GetGlobalGenerator()->Build(
       cmake::NO_BUILD_PARALLEL_LEVEL, this->SourceDir, this->BinaryDir,
-      this->BuildProject, tar, output, this->BuildMakeProgram, config,
+      this->BuildProject, { tar }, output, this->BuildMakeProgram, config,
       !this->BuildNoClean, false, false, remainingTime);
     out << output;
     // if the build failed then return

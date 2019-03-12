@@ -31,6 +31,7 @@
 #include "cmInstallSubdirectoryGenerator.h"
 #include "cmListFileCache.h"
 #include "cmMessageType.h"
+#include "cmRange.h"
 #include "cmSourceFile.h"
 #include "cmSourceFileLocation.h"
 #include "cmState.h"
@@ -348,6 +349,9 @@ public:
     this->Makefile->Backtrace = this->Makefile->Backtrace.Pop();
   }
 
+  cmMakefileCall(const cmMakefileCall&) = delete;
+  cmMakefileCall& operator=(const cmMakefileCall&) = delete;
+
 private:
   cmMakefile* Makefile;
 };
@@ -438,6 +442,9 @@ public:
                bool noPolicyScope);
   ~IncludeScope();
   void Quiet() { this->ReportError = false; }
+
+  IncludeScope(const IncludeScope&) = delete;
+  IncludeScope& operator=(const IncludeScope&) = delete;
 
 private:
   cmMakefile* Makefile;
@@ -605,6 +612,9 @@ public:
   }
 
   void Quiet() { this->ReportError = false; }
+
+  ListFileScope(const ListFileScope&) = delete;
+  ListFileScope& operator=(const ListFileScope&) = delete;
 
 private:
   cmMakefile* Makefile;
@@ -950,9 +960,8 @@ cmSourceFile* cmMakefile::AddCustomCommandToOutput(
     if (file && file->GetCustomCommand() && !replace) {
       // The rule file already exists.
       if (commandLines != file->GetCustomCommand()->GetCommandLines()) {
-        cmSystemTools::Error("Attempt to add a custom rule to output \"",
-                             outName.c_str(),
-                             "\" which already has a custom rule.");
+        cmSystemTools::Error("Attempt to add a custom rule to output \"" +
+                             outName + "\" which already has a custom rule.");
       }
       return file;
     }
@@ -1092,8 +1101,8 @@ void cmMakefile::AddCustomCommandOldStyle(
         ti->second.AddSource(sf->GetFullPath());
       } else {
         cmSystemTools::Error("Attempt to add a custom rule to a target "
-                             "that does not exist yet for target ",
-                             target.c_str());
+                             "that does not exist yet for target " +
+                             target);
         return;
       }
     }
@@ -1180,8 +1189,7 @@ cmTarget* cmMakefile::AddUtilityCommand(
     if (sf) {
       sf->SetProperty("SYMBOLIC", "1");
     } else {
-      cmSystemTools::Error("Could not get source file entry for ",
-                           force.c_str());
+      cmSystemTools::Error("Could not get source file entry for " + force);
     }
 
     // Always create the byproduct sources and mark them generated.
@@ -1496,6 +1504,9 @@ public:
   }
 
   void Quiet() { this->ReportError = false; }
+
+  BuildsystemFileScope(const BuildsystemFileScope&) = delete;
+  BuildsystemFileScope& operator=(const BuildsystemFileScope&) = delete;
 
 private:
   cmMakefile* Makefile;
@@ -2433,8 +2444,9 @@ const std::string& cmMakefile::GetRequiredDefinition(
   const std::string* def = GetDef(name);
   if (!def) {
     cmSystemTools::Error("Error required internal CMake variable not "
-                         "set, cmake may not be built correctly.\n",
-                         "Missing variable is:\n", name.c_str());
+                         "set, cmake may not be built correctly.\n"
+                         "Missing variable is:\n" +
+                         name);
     return empty;
   }
   return *def;
@@ -3717,22 +3729,23 @@ void cmMakefile::ConfigureString(const std::string& input, std::string& output,
                                 lineNumber, true, true);
 }
 
-int cmMakefile::ConfigureFile(const char* infile, const char* outfile,
-                              bool copyonly, bool atOnly, bool escapeQuotes,
+int cmMakefile::ConfigureFile(const std::string& infile,
+                              const std::string& outfile, bool copyonly,
+                              bool atOnly, bool escapeQuotes,
                               cmNewLineStyle newLine)
 {
   int res = 1;
   if (!this->CanIWriteThisFile(outfile)) {
-    cmSystemTools::Error("Attempt to write file: ", outfile,
+    cmSystemTools::Error("Attempt to write file: " + outfile +
                          " into a source directory.");
     return 0;
   }
   if (!cmSystemTools::FileExists(infile)) {
-    cmSystemTools::Error("File ", infile, " does not exist.");
+    cmSystemTools::Error("File " + infile + " does not exist.");
     return 0;
   }
   std::string soutfile = outfile;
-  std::string sinfile = infile;
+  const std::string& sinfile = infile;
   this->AddCMakeDependFile(sinfile);
   cmSystemTools::ConvertToUnixSlashes(soutfile);
 
@@ -3766,15 +3779,15 @@ int cmMakefile::ConfigureFile(const char* infile, const char* outfile,
     tempOutputFile += ".tmp";
     cmsys::ofstream fout(tempOutputFile.c_str(), omode);
     if (!fout) {
-      cmSystemTools::Error("Could not open file for write in copy operation ",
-                           tempOutputFile.c_str());
+      cmSystemTools::Error("Could not open file for write in copy operation " +
+                           tempOutputFile);
       cmSystemTools::ReportLastSystemError("");
       return 0;
     }
     cmsys::ifstream fin(sinfile.c_str());
     if (!fin) {
-      cmSystemTools::Error("Could not open file for read in copy operation ",
-                           sinfile.c_str());
+      cmSystemTools::Error("Could not open file for read in copy operation " +
+                           sinfile);
       return 0;
     }
 
@@ -4274,7 +4287,7 @@ bool cmMakefile::SetPolicy(cmPolicies::PolicyID id,
 
   // Deprecate old policies, especially those that require a lot
   // of code to maintain the old behavior.
-  if (status == cmPolicies::OLD && id <= cmPolicies::CMP0065 &&
+  if (status == cmPolicies::OLD && id <= cmPolicies::CMP0066 &&
       !(this->GetCMakeInstance()->GetIsInTryCompile() &&
         (
           // Policies set by cmCoreTryCompile::TryCompileCode.
@@ -4712,6 +4725,13 @@ bool cmMakefile::AddRequiredTargetCxxFeature(cmTarget* target,
                                needCxx17, needCxx20);
 
   const char* existingCxxStandard = target->GetProperty("CXX_STANDARD");
+  if (existingCxxStandard == nullptr) {
+    const char* defaultCxxStandard =
+      this->GetDefinition("CMAKE_CXX_STANDARD_DEFAULT");
+    if (defaultCxxStandard && *defaultCxxStandard) {
+      existingCxxStandard = defaultCxxStandard;
+    }
+  }
   const char* const* existingCxxLevel = nullptr;
   if (existingCxxStandard) {
     existingCxxLevel =
@@ -4814,6 +4834,13 @@ bool cmMakefile::AddRequiredTargetCFeature(cmTarget* target,
   this->CheckNeededCLanguage(feature, needC90, needC99, needC11);
 
   const char* existingCStandard = target->GetProperty("C_STANDARD");
+  if (existingCStandard == nullptr) {
+    const char* defaultCStandard =
+      this->GetDefinition("CMAKE_C_STANDARD_DEFAULT");
+    if (defaultCStandard && *defaultCStandard) {
+      existingCStandard = defaultCStandard;
+    }
+  }
   if (existingCStandard) {
     if (std::find_if(cm::cbegin(C_STANDARDS), cm::cend(C_STANDARDS),
                      cmStrCmp(existingCStandard)) == cm::cend(C_STANDARDS)) {

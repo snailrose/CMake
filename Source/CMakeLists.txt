@@ -92,7 +92,6 @@ include_directories(
   ${CMAKE_ZLIB_INCLUDES}
   ${CMAKE_EXPAT_INCLUDES}
   ${CMAKE_TAR_INCLUDES}
-  ${CMAKE_COMPRESS_INCLUDES}
   ${CMake_HAIKU_INCLUDE_DIRS}
   )
 
@@ -801,7 +800,7 @@ endforeach()
 add_library(CMakeLib ${SRCS})
 target_link_libraries(CMakeLib cmsys
   ${CMAKE_EXPAT_LIBRARIES} ${CMAKE_ZLIB_LIBRARIES}
-  ${CMAKE_TAR_LIBRARIES} ${CMAKE_COMPRESS_LIBRARIES}
+  ${CMAKE_TAR_LIBRARIES}
   ${CMAKE_CURL_LIBRARIES}
   ${CMAKE_JSONCPP_LIBRARIES}
   ${CMAKE_LIBUV_LIBRARIES}
@@ -1060,9 +1059,6 @@ if(CPACK_ENABLE_FREEBSD_PKG AND FREEBSD_PKG_INCLUDE_DIRS AND FREEBSD_PKG_LIBRARI
 endif()
 
 if(APPLE)
-  add_executable(cmakexbuild cmakexbuild.cxx)
-  list(APPEND _tools cmakexbuild)
-  target_link_libraries(cmakexbuild CMakeLib)
   add_executable(OSXScriptLauncher
     CPack/OSXScriptLauncher.cxx)
   target_link_libraries(OSXScriptLauncher cmsys)

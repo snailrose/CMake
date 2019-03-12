@@ -14,7 +14,7 @@ Generators
 ----------
 
 * The :generator:`Visual Studio 16 2019` generator was added.  This is
-  experimental and based on "Visual Studio 2019 Preview 2" because this
+  experimental and based on "Visual Studio 2019 Preview 4" because this
   version of VS has not been released.
 
   The VS 2019 generator differs from generators for earlier versions
@@ -166,13 +166,18 @@ Modules
   :command:`check_fortran_source_runs` command to check if a Fortran
   source snippet compiles and runs.
 
+* The :module:`CMakePackageConfigHelpers` module's
+  :command:`write_basic_package_version_file` command gained a new
+  ``ARCH_INDEPENDENT`` option for supporting architecture-independent
+  packages.
+
 * The :module:`ExternalProject` module :command:`ExternalProject_Add` command
   gained ``LOG_DIR`` and ``LOG_MERGED_STDOUTERR`` options to control logging.
 
 * The :module:`ExternalProject` module :command:`ExternalProject_Add` command
   gained ``LOG_PATCH`` to optionally log the patch step.
 
-* The :module:`ExternalProject` module's ``ExternalProject_Add`` command
+* The :module:`ExternalProject` module :command:`ExternalProject_Add` command
   learned to apply ``SOURCE_SUBDIR`` when ``BUILD_IN_SOURCE`` is also used.
   The ``BUILD_COMMAND`` is run in the given ``SOURCE_SUBDIR`` of the
   ``SOURCE_DIR``.
@@ -210,8 +215,6 @@ Modules
   ``R2018a`` to specify the MEX API version to use; these options
   mirror the new options to the ``mex`` command in MATLAB R2018a.
   The option ``MX_LIBRARY`` is no longer needed.
-
-* A :module:`FindOctave` module was added to find GNU octave.
 
 * The :module:`FindPostgreSQL` module now provides imported targets.
 
@@ -370,3 +373,7 @@ Other Changes
   :variable:`CPACK_DEBIAN_ARCHIVE_TYPE` variable, because ``dpkg`` has
   never supported the PAX tar format. The ``paxr`` value will be mapped
   to ``gnutar`` and a deprecation message emitted.
+
+* CMake no longer issues a warning if a target listed in an
+  :command:`install(TARGETS)` command has its :prop_tgt:`EXCLUDE_FROM_ALL`
+  property set to true.

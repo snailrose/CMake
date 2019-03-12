@@ -68,8 +68,8 @@ void cmNinjaNormalTargetGenerator::Generate()
 {
   if (this->TargetLinkLanguage.empty()) {
     cmSystemTools::Error("CMake can not determine linker language for "
-                         "target: ",
-                         this->GetGeneratorTarget()->GetName().c_str());
+                         "target: " +
+                         this->GetGeneratorTarget()->GetName());
     return;
   }
 
@@ -283,6 +283,11 @@ void cmNinjaNormalTargetGenerator::WriteLinkRule(bool useResponseFile)
       cmState::GetTargetTypeName(this->GetGeneratorTarget()->GetType());
 
     vars.Language = this->TargetLinkLanguage.c_str();
+    if (this->TargetLinkLanguage == "Swift") {
+      vars.SwiftPartialModules = "$SWIFT_PARTIAL_MODULES";
+      vars.TargetSwiftModule = "$TARGET_SWIFT_MODULE";
+      vars.TargetSwiftDoc = "$TARGET_SWIFT_DOC";
+    }
 
     std::string responseFlag;
     if (!useResponseFile) {
@@ -787,6 +792,34 @@ void cmNinjaNormalTargetGenerator::WriteLinkStatement()
   cmNinjaDeps outputs;
   outputs.push_back(targetOutputReal);
 
+  if (this->TargetLinkLanguage == "Swift") {
+    if (const char* name = gt.GetProperty("SWIFT_MODULE_NAME")) {
+      vars["TARGET_SWIFT_DOC"] = std::string(name) + ".swiftdoc";
+      vars["TARGET_SWIFT_MODULE"] = std::string(name) + ".swiftmodule";
+    } else {
+      vars["TARGET_SWIFT_DOC"] = gt.GetName() + ".swiftdoc";
+      vars["TARGET_SWIFT_MODULE"] = gt.GetName() + ".swiftmodule";
+    }
+    outputs.push_back(vars["TARGET_SWIFT_DOC"]);
+    outputs.push_back(vars["TARGET_SWIFT_MODULE"]);
+
+    cmLocalNinjaGenerator& localGen = *this->GetLocalGenerator();
+
+    std::string partials;
+    std::vector<cmSourceFile const*> sources;
+    gt.GetObjectSources(sources, this->GetConfigName());
+    for (cmSourceFile const* source : sources) {
+      partials += " ";
+      if (const char* partial = source->GetProperty("SWIFT_PARTIAL_MODULE")) {
+        partials += partial;
+      } else {
+        partials += localGen.GetTargetDirectory(&gt) + "/" +
+          gt.GetObjectName(source) + ".swiftmodule";
+      }
+    }
+    vars["SWIFT_PARTIAL_MODULES"] = partials;
+  }
+
   // Compute specific libraries to link with.
   cmNinjaDeps explicitDeps = this->GetObjects();
   cmNinjaDeps implicitDeps = this->ComputeLinkDeps(this->TargetLinkLanguage);
@@ -799,10 +832,9 @@ void cmNinjaNormalTargetGenerator::WriteLinkStatement()
 
   std::string frameworkPath;
   std::string linkPath;
-  cmGeneratorTarget& genTarget = *this->GetGeneratorTarget();
 
-  std::string createRule = genTarget.GetCreateRuleVariable(
-    this->TargetLinkLanguage, this->GetConfigName());
+  std::string createRule =
+    gt.GetCreateRuleVariable(this->TargetLinkLanguage, this->GetConfigName());
   bool useWatcomQuote = mf->IsOn(createRule + "_USE_WATCOM_QUOTE");
   cmLocalNinjaGenerator& localGen = *this->GetLocalGenerator();
 
@@ -815,9 +847,9 @@ void cmNinjaNormalTargetGenerator::WriteLinkStatement()
       this->GetLocalGenerator()->GetStateSnapshot().GetDirectory()));
   linkLineComputer->SetUseWatcomQuote(useWatcomQuote);
 
-  localGen.GetTargetFlags(
-    linkLineComputer.get(), this->GetConfigName(), vars["LINK_LIBRARIES"],
-    vars["FLAGS"], vars["LINK_FLAGS"], frameworkPath, linkPath, &genTarget);
+  localGen.GetTargetFlags(linkLineComputer.get(), this->GetConfigName(),
+                          vars["LINK_LIBRARIES"], vars["FLAGS"],
+                          vars["LINK_FLAGS"], frameworkPath, linkPath, &gt);
 
   // Add OS X version flags, if any.
   if (this->GeneratorTarget->GetType() == cmStateEnums::SHARED_LIBRARY ||
@@ -838,7 +870,7 @@ void cmNinjaNormalTargetGenerator::WriteLinkStatement()
 
   vars["LINK_PATH"] = frameworkPath + linkPath;
   std::string lwyuFlags;
-  if (genTarget.GetPropertyAsBool("LINK_WHAT_YOU_USE")) {
+  if (gt.GetPropertyAsBool("LINK_WHAT_YOU_USE")) {
     lwyuFlags = " -Wl,--no-as-needed";
   }
 
@@ -847,17 +879,16 @@ void cmNinjaNormalTargetGenerator::WriteLinkStatement()
   // code between the Makefile executable and library generators.
   if (targetType == cmStateEnums::EXECUTABLE) {
     std::string t = vars["FLAGS"];
-    localGen.AddArchitectureFlags(t, &genTarget, TargetLinkLanguage, cfgName);
+    localGen.AddArchitectureFlags(t, &gt, TargetLinkLanguage, cfgName);
     t += lwyuFlags;
     vars["FLAGS"] = t;
   } else {
     std::string t = vars["ARCH_FLAGS"];
-    localGen.AddArchitectureFlags(t, &genTarget, TargetLinkLanguage, cfgName);
+    localGen.AddArchitectureFlags(t, &gt, TargetLinkLanguage, cfgName);
     vars["ARCH_FLAGS"] = t;
     t.clear();
     t += lwyuFlags;
-    localGen.AddLanguageFlagsForLinking(t, &genTarget, TargetLinkLanguage,
-                                        cfgName);
+    localGen.AddLanguageFlagsForLinking(t, &gt, TargetLinkLanguage, cfgName);
     vars["LANGUAGE_COMPILE_FLAGS"] = t;
   }
   if (this->GetGeneratorTarget()->HasSOName(cfgName)) {
@@ -880,7 +911,7 @@ void cmNinjaNormalTargetGenerator::WriteLinkStatement()
       targetOutputImplib, cmOutputConverter::SHELL);
     vars["TARGET_IMPLIB"] = impLibPath;
     EnsureParentDirectoryExists(impLibPath);
-    if (genTarget.HasImportLibrary(cfgName)) {
+    if (gt.HasImportLibrary(cfgName)) {
       byproducts.push_back(targetOutputImplib);
     }
   }

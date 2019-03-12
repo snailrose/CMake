@@ -9,6 +9,7 @@
 #include "cmMakefile.h"
 #include "cmQtAutoGeneratorMocUic.h"
 #include "cmQtAutoGeneratorRcc.h"
+#include "cmRange.h"
 #include "cmState.h"
 #include "cmStateDirectory.h"
 #include "cmStateSnapshot.h"
@@ -37,6 +38,7 @@
 #include "cmsys/Process.h"
 #include "cmsys/Terminal.h"
 #include <algorithm>
+#include <array>
 #include <iostream>
 #include <iterator>
 #include <memory> // IWYU pragma: keep
@@ -350,12 +352,13 @@ struct CoCompiler
   bool NoOriginalCommand;
 };
 
-static CoCompiler CoCompilers[] = { // Table of options and handlers.
-  { "--cppcheck=", HandleCppCheck, false },
-  { "--cpplint=", HandleCppLint, false },
-  { "--iwyu=", HandleIWYU, false },
-  { "--lwyu=", HandleLWYU, true },
-  { "--tidy=", HandleTidy, false }
+static const std::array<CoCompiler, 5> CoCompilers = {
+  { // Table of options and handlers.
+    { "--cppcheck=", HandleCppCheck, false },
+    { "--cpplint=", HandleCppLint, false },
+    { "--iwyu=", HandleIWYU, false },
+    { "--lwyu=", HandleLWYU, true },
+    { "--tidy=", HandleTidy, false } }
 };
 
 struct CoCompileJob
@@ -386,16 +389,15 @@ int cmcmd::HandleCoCompileCommands(std::vector<std::string>& args)
       doing_options = false;
     } else if (doing_options) {
       bool optionFound = false;
-      for (CoCompiler const* cc = cm::cbegin(CoCompilers);
-           cc != cm::cend(CoCompilers); ++cc) {
-        size_t optionLen = strlen(cc->Option);
-        if (arg.compare(0, optionLen, cc->Option) == 0) {
+      for (CoCompiler const& cc : CoCompilers) {
+        size_t optionLen = strlen(cc.Option);
+        if (arg.compare(0, optionLen, cc.Option) == 0) {
           optionFound = true;
           CoCompileJob job;
           job.Command = arg.substr(optionLen);
-          job.Handler = cc->Handler;
+          job.Handler = cc.Handler;
           jobs.push_back(std::move(job));
-          if (cc->NoOriginalCommand) {
+          if (cc.NoOriginalCommand) {
             runOriginalCmd = false;
           }
         }
@@ -419,9 +421,8 @@ int cmcmd::HandleCoCompileCommands(std::vector<std::string>& args)
   if (jobs.empty()) {
     std::cerr << "__run_co_compile missing command to run. "
                  "Looking for one or more of the following:\n";
-    for (CoCompiler const* cc = cm::cbegin(CoCompilers);
-         cc != cm::cend(CoCompilers); ++cc) {
-      std::cerr << cc->Option << "\n";
+    for (CoCompiler const& cc : CoCompilers) {
+      std::cerr << cc.Option << "\n";
     }
     return 1;
   }
@@ -817,8 +818,8 @@ int cmcmd::ExecuteCMakeCommand(std::vector<std::string>& args)
     if (args[1] == "chdir" && args.size() >= 4) {
       std::string const& directory = args[2];
       if (!cmSystemTools::FileExists(directory)) {
-        cmSystemTools::Error("Directory does not exist for chdir command: ",
-                             args[2].c_str());
+        cmSystemTools::Error("Directory does not exist for chdir command: " +
+                             args[2]);
         return 1;
       }
 
@@ -1065,12 +1066,12 @@ int cmcmd::ExecuteCMakeCommand(std::vector<std::string>& args)
                         format) != cm::cend(knownFormats);
 
             if (!isKnown) {
-              cmSystemTools::Error("Unknown -E tar --format= argument: ",
-                                   format.c_str());
+              cmSystemTools::Error("Unknown -E tar --format= argument: " +
+                                   format);
               return 1;
             }
           } else {
-            cmSystemTools::Error("Unknown option to -E tar: ", arg.c_str());
+            cmSystemTools::Error("Unknown option to -E tar: " + arg);
             return 1;
           }
         } else {
@@ -1094,8 +1095,8 @@ int cmcmd::ExecuteCMakeCommand(std::vector<std::string>& args)
         ++nCompress;
       }
       if ((format == "7zip" || format == "zip") && nCompress > 0) {
-        cmSystemTools::Error("Can not use compression flags with format: ",
-                             format.c_str());
+        cmSystemTools::Error("Can not use compression flags with format: " +
+                             format);
         return 1;
       }
       if (nCompress > 1) {
@@ -1109,18 +1110,18 @@ int cmcmd::ExecuteCMakeCommand(std::vector<std::string>& args)
 
       if (flags.find_first_of('t') != std::string::npos) {
         if (!cmSystemTools::ListTar(outFile.c_str(), verbose)) {
-          cmSystemTools::Error("Problem listing tar: ", outFile.c_str());
+          cmSystemTools::Error("Problem listing tar: " + outFile);
           return 1;
         }
       } else if (flags.find_first_of('c') != std::string::npos) {
         if (!cmSystemTools::CreateTar(outFile.c_str(), files, compress,
                                       verbose, mtime, format)) {
-          cmSystemTools::Error("Problem creating tar: ", outFile.c_str());
+          cmSystemTools::Error("Problem creating tar: " + outFile);
           return 1;
         }
       } else if (flags.find_first_of('x') != std::string::npos) {
         if (!cmSystemTools::ExtractTar(outFile.c_str(), verbose)) {
-          cmSystemTools::Error("Problem extracting tar: ", outFile.c_str());
+          cmSystemTools::Error("Problem extracting tar: " + outFile);
           return 1;
         }
 #ifdef WIN32
@@ -1830,7 +1831,8 @@ int cmVSLink::LinkIncremental()
   // Compile the resource file.
   std::vector<std::string> rcCommand;
   rcCommand.push_back(this->RcPath.empty() ? "rc" : this->RcPath);
-  rcCommand.push_back("/fo" + this->ManifestFileRes);
+  rcCommand.emplace_back("/fo");
+  rcCommand.push_back(this->ManifestFileRes);
   rcCommand.push_back(this->ManifestFileRC);
   if (!RunCommand("RC Pass 1", rcCommand, this->Verbose, FORMAT_DECIMAL)) {
     return -1;

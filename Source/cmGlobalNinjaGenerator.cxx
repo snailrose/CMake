@@ -26,6 +26,7 @@
 #include "cmMessageType.h"
 #include "cmNinjaLinkLineComputer.h"
 #include "cmOutputConverter.h"
+#include "cmRange.h"
 #include "cmState.h"
 #include "cmStateDirectory.h"
 #include "cmStateSnapshot.h"
@@ -136,16 +137,16 @@ void cmGlobalNinjaGenerator::WriteBuild(
   // Make sure there is a rule.
   if (rule.empty()) {
     cmSystemTools::Error("No rule for WriteBuildStatement! called "
-                         "with comment: ",
-                         comment.c_str());
+                         "with comment: " +
+                         comment);
     return;
   }
 
   // Make sure there is at least one output file.
   if (outputs.empty()) {
     cmSystemTools::Error("No output files for WriteBuildStatement! called "
-                         "with comment: ",
-                         comment.c_str());
+                         "with comment: " +
+                         comment);
     return;
   }
 
@@ -334,16 +335,16 @@ void cmGlobalNinjaGenerator::WriteRule(
   // Make sure the rule has a name.
   if (name.empty()) {
     cmSystemTools::Error("No name given for WriteRuleStatement! called "
-                         "with comment: ",
-                         comment.c_str());
+                         "with comment: " +
+                         comment);
     return;
   }
 
   // Make sure a command is given.
   if (command.empty()) {
     cmSystemTools::Error("No command given for WriteRuleStatement! called "
-                         "with comment: ",
-                         comment.c_str());
+                         "with comment: " +
+                         comment);
     return;
   }
 
@@ -376,7 +377,7 @@ void cmGlobalNinjaGenerator::WriteRule(
 
   if (!rspfile.empty()) {
     if (rspcontent.empty()) {
-      cmSystemTools::Error("No rspfile_content given!", comment.c_str());
+      cmSystemTools::Error("No rspfile_content given!" + comment);
       return;
     }
     cmGlobalNinjaGenerator::Indent(os, 1);
@@ -407,8 +408,8 @@ void cmGlobalNinjaGenerator::WriteVariable(std::ostream& os,
   // Make sure we have a name.
   if (name.empty()) {
     cmSystemTools::Error("No name given for WriteVariable! called "
-                         "with comment: ",
-                         comment.c_str());
+                         "with comment: " +
+                         comment);
     return;
   }
 
@@ -676,31 +677,37 @@ void cmGlobalNinjaGenerator::EnableLanguage(
 //   cmGlobalXCodeGenerator
 // Called by:
 //   cmGlobalGenerator::Build()
-void cmGlobalNinjaGenerator::GenerateBuildCommand(
-  GeneratedMakeCommand& makeCommand, const std::string& makeProgram,
-  const std::string& /*projectName*/, const std::string& /*projectDir*/,
-  const std::string& targetName, const std::string& /*config*/, bool /*fast*/,
-  int jobs, bool verbose, std::vector<std::string> const& makeOptions)
+std::vector<cmGlobalGenerator::GeneratedMakeCommand>
+cmGlobalNinjaGenerator::GenerateBuildCommand(
+  const std::string& makeProgram, const std::string& /*projectName*/,
+  const std::string& /*projectDir*/,
+  std::vector<std::string> const& targetNames, const std::string& /*config*/,
+  bool /*fast*/, int jobs, bool verbose,
+  std::vector<std::string> const& makeOptions)
 {
-  makeCommand.add(this->SelectMakeProgram(makeProgram));
+  GeneratedMakeCommand makeCommand;
+  makeCommand.Add(this->SelectMakeProgram(makeProgram));
 
   if (verbose) {
-    makeCommand.add("-v");
+    makeCommand.Add("-v");
   }
 
   if ((jobs != cmake::NO_BUILD_PARALLEL_LEVEL) &&
       (jobs != cmake::DEFAULT_BUILD_PARALLEL_LEVEL)) {
-    makeCommand.add("-j", std::to_string(jobs));
+    makeCommand.Add("-j", std::to_string(jobs));
   }
 
-  makeCommand.add(makeOptions.begin(), makeOptions.end());
-  if (!targetName.empty()) {
-    if (targetName == "clean") {
-      makeCommand.add("-t", "clean");
-    } else {
-      makeCommand.add(targetName);
+  makeCommand.Add(makeOptions.begin(), makeOptions.end());
+  for (const auto& tname : targetNames) {
+    if (!tname.empty()) {
+      if (tname == "clean") {
+        makeCommand.Add("-t", "clean");
+      } else {
+        makeCommand.Add(tname);
+      }
     }
   }
+  return { std::move(makeCommand) };
 }
 
 // Non-virtual public methods.
@@ -1573,12 +1580,13 @@ Compilation of source files within a target is split into the following steps:
       command = gfortran -cpp $DEFINES $INCLUDES $FLAGS -E $in -o $out &&
                 cmake -E cmake_ninja_depends \
                   --tdi=FortranDependInfo.json --pp=$out --dep=$DEP_FILE \
-                  --obj=$OBJ_FILE --ddi=$DYNDEP_INTERMEDIATE_FILE
+                  --obj=$OBJ_FILE --ddi=$DYNDEP_INTERMEDIATE_FILE \
+                  --lang=Fortran
 
-    build src.f90-pp.f90 | src.f90-pp.f90.ddi: Fortran_PREPROCESS src.f90
+    build src.f90-pp.f90 | src.f90.o.ddi: Fortran_PREPROCESS src.f90
       OBJ_FILE = src.f90.o
-      DEP_FILE = src.f90-pp.f90.d
-      DYNDEP_INTERMEDIATE_FILE = src.f90-pp.f90.ddi
+      DEP_FILE = src.f90.o.d
+      DYNDEP_INTERMEDIATE_FILE = src.f90.o.ddi
 
    The ``cmake -E cmake_ninja_depends`` tool reads the preprocessed output
    and generates the ninja depfile for preprocessor dependencies.  It also
@@ -1592,9 +1600,9 @@ Compilation of source files within a target is split into the following steps:
 
     rule Fortran_DYNDEP
       command = cmake -E cmake_ninja_dyndep \
-                  --tdi=FortranDependInfo.json --dd=$out $in
+                  --tdi=FortranDependInfo.json --lang=Fortran --dd=$out $in
 
-    build Fortran.dd: Fortran_DYNDEP src1.f90-pp.f90.ddi src2.f90-pp.f90.ddi
+    build Fortran.dd: Fortran_DYNDEP src1.f90.o.ddi src2.f90.o.ddi
 
    The ``cmake -E cmake_ninja_dyndep`` tool reads the "ddi" files from all
    sources in the target and the ``FortranModules.json`` files from targets
@@ -1632,6 +1640,19 @@ Compilation of source files within a target is split into the following steps:
    (because the latter consumes the module).
 */
 
+struct cmSourceInfo
+{
+  // Set of provided and required modules.
+  std::set<std::string> Provides;
+  std::set<std::string> Requires;
+
+  // Set of files included in the translation unit.
+  std::set<std::string> Includes;
+};
+
+static std::unique_ptr<cmSourceInfo> cmcmd_cmake_ninja_depends_fortran(
+  std::string const& arg_tdi, std::string const& arg_pp);
+
 int cmcmd_cmake_ninja_depends(std::vector<std::string>::const_iterator argBeg,
                               std::vector<std::string>::const_iterator argEnd)
 {
@@ -1640,6 +1661,7 @@ int cmcmd_cmake_ninja_depends(std::vector<std::string>::const_iterator argBeg,
   std::string arg_dep;
   std::string arg_obj;
   std::string arg_ddi;
+  std::string arg_lang;
   for (std::string const& arg : cmMakeRange(argBeg, argEnd)) {
     if (cmHasLiteralPrefix(arg, "--tdi=")) {
       arg_tdi = arg.substr(6);
@@ -1651,9 +1673,10 @@ int cmcmd_cmake_ninja_depends(std::vector<std::string>::const_iterator argBeg,
       arg_obj = arg.substr(6);
     } else if (cmHasLiteralPrefix(arg, "--ddi=")) {
       arg_ddi = arg.substr(6);
+    } else if (cmHasLiteralPrefix(arg, "--lang=")) {
+      arg_lang = arg.substr(7);
     } else {
-      cmSystemTools::Error("-E cmake_ninja_depends unknown argument: ",
-                           arg.c_str());
+      cmSystemTools::Error("-E cmake_ninja_depends unknown argument: " + arg);
       return 1;
     }
   }
@@ -1677,7 +1700,61 @@ int cmcmd_cmake_ninja_depends(std::vector<std::string>::const_iterator argBeg,
     cmSystemTools::Error("-E cmake_ninja_depends requires value for --ddi=");
     return 1;
   }
+  if (arg_lang.empty()) {
+    cmSystemTools::Error("-E cmake_ninja_depends requires value for --lang=");
+    return 1;
+  }
 
+  std::unique_ptr<cmSourceInfo> info;
+  if (arg_lang == "Fortran") {
+    info = cmcmd_cmake_ninja_depends_fortran(arg_tdi, arg_pp);
+  } else {
+    cmSystemTools::Error("-E cmake_ninja_depends does not understand the " +
+                         arg_lang + " language");
+    return 1;
+  }
+
+  if (!info) {
+    // The error message is already expected to have been output.
+    return 1;
+  }
+
+  {
+    cmGeneratedFileStream depfile(arg_dep);
+    depfile << cmSystemTools::ConvertToUnixOutputPath(arg_pp) << ":";
+    for (std::string const& include : info->Includes) {
+      depfile << " \\\n " << cmSystemTools::ConvertToUnixOutputPath(include);
+    }
+    depfile << "\n";
+  }
+
+  Json::Value ddi(Json::objectValue);
+  ddi["object"] = arg_obj;
+
+  Json::Value& ddi_provides = ddi["provides"] = Json::arrayValue;
+  for (std::string const& provide : info->Provides) {
+    ddi_provides.append(provide);
+  }
+  Json::Value& ddi_requires = ddi["requires"] = Json::arrayValue;
+  for (std::string const& r : info->Requires) {
+    // Require modules not provided in the same source.
+    if (!info->Provides.count(r)) {
+      ddi_requires.append(r);
+    }
+  }
+
+  cmGeneratedFileStream ddif(arg_ddi);
+  ddif << ddi;
+  if (!ddif) {
+    cmSystemTools::Error("-E cmake_ninja_depends failed to write " + arg_ddi);
+    return 1;
+  }
+  return 0;
+}
+
+std::unique_ptr<cmSourceInfo> cmcmd_cmake_ninja_depends_fortran(
+  std::string const& arg_tdi, std::string const& arg_pp)
+{
   cmFortranCompiler fc;
   std::vector<std::string> includes;
   {
@@ -1687,10 +1764,9 @@ int cmcmd_cmake_ninja_depends(std::vector<std::string>::const_iterator argBeg,
       cmsys::ifstream tdif(arg_tdi.c_str(), std::ios::in | std::ios::binary);
       Json::Reader reader;
       if (!reader.parse(tdif, tdio, false)) {
-        cmSystemTools::Error("-E cmake_ninja_depends failed to parse ",
-                             arg_tdi.c_str(),
-                             reader.getFormattedErrorMessages().c_str());
-        return 1;
+        cmSystemTools::Error("-E cmake_ninja_depends failed to parse " +
+                             arg_tdi + reader.getFormattedErrorMessages());
+        return nullptr;
       }
     }
 
@@ -1711,54 +1787,26 @@ int cmcmd_cmake_ninja_depends(std::vector<std::string>::const_iterator argBeg,
     fc.SModExt = tdi_submodule_ext.asString();
   }
 
-  cmFortranSourceInfo info;
+  cmFortranSourceInfo finfo;
   std::set<std::string> defines;
-  cmFortranParser parser(fc, includes, defines, info);
+  cmFortranParser parser(fc, includes, defines, finfo);
   if (!cmFortranParser_FilePush(&parser, arg_pp.c_str())) {
-    cmSystemTools::Error("-E cmake_ninja_depends failed to open ",
-                         arg_pp.c_str());
-    return 1;
+    cmSystemTools::Error("-E cmake_ninja_depends failed to open " + arg_pp);
+    return nullptr;
   }
   if (cmFortran_yyparse(parser.Scanner) != 0) {
     // Failed to parse the file.
-    return 1;
+    return nullptr;
   }
 
-  {
-    cmGeneratedFileStream depfile(arg_dep);
-    depfile << cmSystemTools::ConvertToUnixOutputPath(arg_pp) << ":";
-    for (std::string const& include : info.Includes) {
-      depfile << " \\\n " << cmSystemTools::ConvertToUnixOutputPath(include);
-    }
-    depfile << "\n";
-  }
-
-  Json::Value ddi(Json::objectValue);
-  ddi["object"] = arg_obj;
-
-  Json::Value& ddi_provides = ddi["provides"] = Json::arrayValue;
-  for (std::string const& provide : info.Provides) {
-    ddi_provides.append(provide);
-  }
-  Json::Value& ddi_requires = ddi["requires"] = Json::arrayValue;
-  for (std::string const& r : info.Requires) {
-    // Require modules not provided in the same source.
-    if (!info.Provides.count(r)) {
-      ddi_requires.append(r);
-    }
-  }
-
-  cmGeneratedFileStream ddif(arg_ddi);
-  ddif << ddi;
-  if (!ddif) {
-    cmSystemTools::Error("-E cmake_ninja_depends failed to write ",
-                         arg_ddi.c_str());
-    return 1;
-  }
-  return 0;
+  auto info = cm::make_unique<cmSourceInfo>();
+  info->Provides = finfo.Provides;
+  info->Requires = finfo.Requires;
+  info->Includes = finfo.Includes;
+  return info;
 }
 
-struct cmFortranObjectInfo
+struct cmDyndepObjectInfo
 {
   std::string Object;
   std::vector<std::string> Provides;
@@ -1770,7 +1818,8 @@ bool cmGlobalNinjaGenerator::WriteDyndepFile(
   std::string const& dir_cur_src, std::string const& dir_cur_bld,
   std::string const& arg_dd, std::vector<std::string> const& arg_ddis,
   std::string const& module_dir,
-  std::vector<std::string> const& linked_target_dirs)
+  std::vector<std::string> const& linked_target_dirs,
+  std::string const& arg_lang)
 {
   // Setup path conversions.
   {
@@ -1787,7 +1836,7 @@ bool cmGlobalNinjaGenerator::WriteDyndepFile(
     this->LocalGenerators.push_back(lgd.release());
   }
 
-  std::vector<cmFortranObjectInfo> objects;
+  std::vector<cmDyndepObjectInfo> objects;
   for (std::string const& arg_ddi : arg_ddis) {
     // Load the ddi file and compute the module file paths it provides.
     Json::Value ddio;
@@ -1795,13 +1844,12 @@ bool cmGlobalNinjaGenerator::WriteDyndepFile(
     cmsys::ifstream ddif(arg_ddi.c_str(), std::ios::in | std::ios::binary);
     Json::Reader reader;
     if (!reader.parse(ddif, ddio, false)) {
-      cmSystemTools::Error("-E cmake_ninja_dyndep failed to parse ",
-                           arg_ddi.c_str(),
-                           reader.getFormattedErrorMessages().c_str());
+      cmSystemTools::Error("-E cmake_ninja_dyndep failed to parse " + arg_ddi +
+                           reader.getFormattedErrorMessages());
       return false;
     }
 
-    cmFortranObjectInfo info;
+    cmDyndepObjectInfo info;
     info.Object = ddi["object"].asString();
     Json::Value const& ddi_provides = ddi["provides"];
     if (ddi_provides.isArray()) {
@@ -1823,14 +1871,15 @@ bool cmGlobalNinjaGenerator::WriteDyndepFile(
 
   // Populate the module map with those provided by linked targets first.
   for (std::string const& linked_target_dir : linked_target_dirs) {
-    std::string const ltmn = linked_target_dir + "/FortranModules.json";
+    std::string const ltmn =
+      linked_target_dir + "/" + arg_lang + "Modules.json";
     Json::Value ltm;
     cmsys::ifstream ltmf(ltmn.c_str(), std::ios::in | std::ios::binary);
     Json::Reader reader;
     if (ltmf && !reader.parse(ltmf, ltm, false)) {
-      cmSystemTools::Error("-E cmake_ninja_dyndep failed to parse ",
-                           linked_target_dir.c_str(),
-                           reader.getFormattedErrorMessages().c_str());
+      cmSystemTools::Error("-E cmake_ninja_dyndep failed to parse " +
+                           linked_target_dir +
+                           reader.getFormattedErrorMessages());
       return false;
     }
     if (ltm.isObject()) {
@@ -1844,7 +1893,7 @@ bool cmGlobalNinjaGenerator::WriteDyndepFile(
   // We do this after loading the modules provided by linked targets
   // in case we have one of the same name that must be preferred.
   Json::Value tm = Json::objectValue;
-  for (cmFortranObjectInfo const& object : objects) {
+  for (cmDyndepObjectInfo const& object : objects) {
     for (std::string const& p : object.Provides) {
       std::string const mod = module_dir + p;
       mod_files[p] = mod;
@@ -1855,7 +1904,7 @@ bool cmGlobalNinjaGenerator::WriteDyndepFile(
   cmGeneratedFileStream ddf(arg_dd);
   ddf << "ninja_dyndep_version = 1.0\n";
 
-  for (cmFortranObjectInfo const& object : objects) {
+  for (cmDyndepObjectInfo const& object : objects) {
     std::string const ddComment;
     std::string const ddRule = "dyndep";
     cmNinjaDeps ddOutputs;
@@ -1886,7 +1935,7 @@ bool cmGlobalNinjaGenerator::WriteDyndepFile(
   // Store the map of modules provided by this target in a file for
   // use by dependents that reference this target in linked-target-dirs.
   std::string const target_mods_file =
-    cmSystemTools::GetFilenamePath(arg_dd) + "/FortranModules.json";
+    cmSystemTools::GetFilenamePath(arg_dd) + "/" + arg_lang + "Modules.json";
   cmGeneratedFileStream tmf(target_mods_file);
   tmf << tm;
 
@@ -1900,24 +1949,30 @@ int cmcmd_cmake_ninja_dyndep(std::vector<std::string>::const_iterator argBeg,
     cmSystemTools::HandleResponseFile(argBeg, argEnd);
 
   std::string arg_dd;
+  std::string arg_lang;
   std::string arg_tdi;
   std::vector<std::string> arg_ddis;
   for (std::string const& arg : arg_full) {
     if (cmHasLiteralPrefix(arg, "--tdi=")) {
       arg_tdi = arg.substr(6);
+    } else if (cmHasLiteralPrefix(arg, "--lang=")) {
+      arg_lang = arg.substr(7);
     } else if (cmHasLiteralPrefix(arg, "--dd=")) {
       arg_dd = arg.substr(5);
     } else if (!cmHasLiteralPrefix(arg, "--") &&
                cmHasLiteralSuffix(arg, ".ddi")) {
       arg_ddis.push_back(arg);
     } else {
-      cmSystemTools::Error("-E cmake_ninja_dyndep unknown argument: ",
-                           arg.c_str());
+      cmSystemTools::Error("-E cmake_ninja_dyndep unknown argument: " + arg);
       return 1;
     }
   }
   if (arg_tdi.empty()) {
     cmSystemTools::Error("-E cmake_ninja_dyndep requires value for --tdi=");
+    return 1;
+  }
+  if (arg_lang.empty()) {
+    cmSystemTools::Error("-E cmake_ninja_dyndep requires value for --lang=");
     return 1;
   }
   if (arg_dd.empty()) {
@@ -1931,9 +1986,8 @@ int cmcmd_cmake_ninja_dyndep(std::vector<std::string>::const_iterator argBeg,
     cmsys::ifstream tdif(arg_tdi.c_str(), std::ios::in | std::ios::binary);
     Json::Reader reader;
     if (!reader.parse(tdif, tdio, false)) {
-      cmSystemTools::Error("-E cmake_ninja_dyndep failed to parse ",
-                           arg_tdi.c_str(),
-                           reader.getFormattedErrorMessages().c_str());
+      cmSystemTools::Error("-E cmake_ninja_dyndep failed to parse " + arg_tdi +
+                           reader.getFormattedErrorMessages());
       return 1;
     }
   }
@@ -1961,8 +2015,8 @@ int cmcmd_cmake_ninja_dyndep(std::vector<std::string>::const_iterator argBeg,
     static_cast<cmGlobalNinjaGenerator*>(cm.CreateGlobalGenerator("Ninja")));
   if (!ggd ||
       !ggd->WriteDyndepFile(dir_top_src, dir_top_bld, dir_cur_src, dir_cur_bld,
-                            arg_dd, arg_ddis, module_dir,
-                            linked_target_dirs)) {
+                            arg_dd, arg_ddis, module_dir, linked_target_dirs,
+                            arg_lang)) {
     return 1;
   }
   return 0;

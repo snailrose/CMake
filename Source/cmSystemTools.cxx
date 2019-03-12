@@ -5,6 +5,7 @@
 #include "cmAlgorithms.h"
 #include "cmDuration.h"
 #include "cmProcessOutput.h"
+#include "cmRange.h"
 #include "cm_sys_stat.h"
 #include "cm_uv.h"
 
@@ -521,6 +522,8 @@ public:
     }
     free(this->ArgV);
   }
+  cmSystemToolsArgV(const cmSystemToolsArgV&) = delete;
+  cmSystemToolsArgV& operator=(const cmSystemToolsArgV&) = delete;
   void Store(std::vector<std::string>& args) const
   {
     for (char** arg = this->ArgV; arg && *arg; ++arg) {
@@ -533,7 +536,7 @@ void cmSystemTools::ParseUnixCommandLine(const char* command,
                                          std::vector<std::string>& args)
 {
   // Invoke the underlying parser.
-  cmSystemToolsArgV argv = cmsysSystem_Parse_CommandForUnix(command, 0);
+  cmSystemToolsArgV argv(cmsysSystem_Parse_CommandForUnix(command, 0));
   argv.Store(args);
 }
 
@@ -569,13 +572,14 @@ std::vector<std::string> cmSystemTools::HandleResponseFile(
   return arg_full;
 }
 
-std::vector<std::string> cmSystemTools::ParseArguments(const char* command)
+std::vector<std::string> cmSystemTools::ParseArguments(const std::string& cmd)
 {
   std::vector<std::string> args;
   std::string arg;
 
   bool win_path = false;
 
+  const char* command = cmd.c_str();
   if (command[0] && command[1] &&
       ((command[0] != '/' && command[1] == ':' && command[2] == '\\') ||
        (command[0] == '\"' && command[1] != '/' && command[2] == ':' &&
@@ -876,8 +880,7 @@ bool cmSystemTools::RunSingleCommand(const std::string& command,
     outputflag = OUTPUT_NONE;
   }
 
-  std::vector<std::string> args =
-    cmSystemTools::ParseArguments(command.c_str());
+  std::vector<std::string> args = cmSystemTools::ParseArguments(command);
 
   if (args.empty()) {
     return false;
@@ -1409,7 +1412,7 @@ void cmSystemTools::ConvertToOutputSlashes(std::string& path)
 #endif
 }
 
-std::string cmSystemTools::ConvertToRunCommandPath(const char* path)
+std::string cmSystemTools::ConvertToRunCommandPath(const std::string& path)
 {
 #if defined(_WIN32) && !defined(__CYGWIN__)
   return cmSystemTools::ConvertToWindowsOutputPath(path);
@@ -1423,12 +1426,12 @@ std::string cmSystemTools::RelativePath(std::string const& local,
                                         std::string const& remote)
 {
   if (!cmSystemTools::FileIsFullPath(local)) {
-    cmSystemTools::Error("RelativePath must be passed a full path to local: ",
-                         local.c_str());
+    cmSystemTools::Error("RelativePath must be passed a full path to local: " +
+                         local);
   }
   if (!cmSystemTools::FileIsFullPath(remote)) {
-    cmSystemTools::Error("RelativePath must be passed a full path to remote: ",
-                         remote.c_str());
+    cmSystemTools::Error(
+      "RelativePath must be passed a full path to remote: " + remote);
   }
   return cmsys::SystemTools::RelativePath(local, remote);
 }
@@ -1612,7 +1615,7 @@ void cmSystemTools::EnableVSConsoleOutput()
 #endif
 }
 
-bool cmSystemTools::IsPathToFramework(const char* path)
+bool cmSystemTools::IsPathToFramework(const std::string& path)
 {
   return (cmSystemTools::FileIsFullPath(path) &&
           cmHasLiteralSuffix(path, ".framework"));
@@ -1907,8 +1910,8 @@ bool extract_tar(const char* outFileName, bool verbose, bool extract)
       else {
         cmSystemTools::Error("Problem with archive_write_header(): ",
                              archive_error_string(ext));
-        cmSystemTools::Error("Current file: ",
-                             cm_archive_entry_pathname(entry).c_str());
+        cmSystemTools::Error("Current file: " +
+                             cm_archive_entry_pathname(entry));
         break;
       }
     }
@@ -3003,7 +3006,7 @@ bool cmSystemTools::CheckRPath(std::string const& file,
 #endif
 }
 
-bool cmSystemTools::RepeatedRemoveDirectory(const char* dir)
+bool cmSystemTools::RepeatedRemoveDirectory(const std::string& dir)
 {
   // Windows sometimes locks files temporarily so try a few times.
   for (int i = 0; i < 10; ++i) {

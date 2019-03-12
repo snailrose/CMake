@@ -35,6 +35,7 @@ static std::string cmVS10EscapeAttr(std::string arg)
   cmSystemTools::ReplaceString(arg, "<", "&lt;");
   cmSystemTools::ReplaceString(arg, ">", "&gt;");
   cmSystemTools::ReplaceString(arg, "\"", "&quot;");
+  cmSystemTools::ReplaceString(arg, "\n", "&#10;");
   return arg;
 }
 
@@ -1231,8 +1232,8 @@ void cmVisualStudio10TargetGenerator::Generate()
         propsLocal += this->DefaultArtifactDir;
         propsLocal += "\\nasm.props";
         ConvertToWindowsSlash(propsLocal);
-        this->Makefile->ConfigureFile(propsTemplate.c_str(),
-                                      propsLocal.c_str(), false, true, true);
+        this->Makefile->ConfigureFile(propsTemplate, propsLocal, false, true,
+                                      true);
         Elem(e1, "Import").Attribute("Project", propsLocal);
       }
     }
@@ -2015,8 +2016,7 @@ void cmVisualStudio10TargetGenerator::WriteCustomRule(
         std::string error = "Could not create file: [";
         error += sourcePath;
         error += "]  ";
-        cmSystemTools::Error(error.c_str(),
-                             cmSystemTools::GetLastSystemError().c_str());
+        cmSystemTools::Error(error + cmSystemTools::GetLastSystemError());
       }
     }
   }
@@ -3229,8 +3229,7 @@ bool cmVisualStudio10TargetGenerator::ComputeClOptions(
     this->GeneratorTarget->GetLinkerLanguage(configName);
   if (linkLanguage.empty()) {
     cmSystemTools::Error(
-      "CMake can not determine linker language for target: ",
-      this->Name.c_str());
+      "CMake can not determine linker language for target: " + this->Name);
     return false;
   }
 
@@ -4061,8 +4060,7 @@ bool cmVisualStudio10TargetGenerator::ComputeLinkOptions(
   const std::string& linkLanguage = linkClosure->LinkerLanguage;
   if (linkLanguage.empty()) {
     cmSystemTools::Error(
-      "CMake can not determine linker language for target: ",
-      this->Name.c_str());
+      "CMake can not determine linker language for target: " + this->Name);
     return false;
   }
 
@@ -4107,8 +4105,8 @@ bool cmVisualStudio10TargetGenerator::ComputeLinkOptions(
     this->GeneratorTarget->GetLinkInformation(config);
   if (!pcli) {
     cmSystemTools::Error(
-      "CMake can not compute cmComputeLinkInformation for target: ",
-      this->Name.c_str());
+      "CMake can not compute cmComputeLinkInformation for target: " +
+      this->Name);
     return false;
   }
   cmComputeLinkInformation& cli = *pcli;
@@ -4288,8 +4286,8 @@ bool cmVisualStudio10TargetGenerator::ComputeLibOptions(
     this->GeneratorTarget->GetLinkInformation(config);
   if (!pcli) {
     cmSystemTools::Error(
-      "CMake can not compute cmComputeLinkInformation for target: ",
-      this->Name.c_str());
+      "CMake can not compute cmComputeLinkInformation for target: " +
+      this->Name);
     return false;
   }
 

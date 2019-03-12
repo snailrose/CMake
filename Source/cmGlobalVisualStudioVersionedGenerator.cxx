@@ -206,8 +206,8 @@ class cmGlobalVisualStudioVersionedGenerator::Factory16
   : public cmGlobalGeneratorFactory
 {
 public:
-  virtual cmGlobalGenerator* CreateGlobalGenerator(const std::string& name,
-                                                   cmake* cm) const
+  cmGlobalGenerator* CreateGlobalGenerator(const std::string& name,
+                                           cmake* cm) const override
   {
     std::string genName;
     const char* p = cmVS16GenName(name, genName);
@@ -221,7 +221,7 @@ public:
     return 0;
   }
 
-  virtual void GetDocumentation(cmDocumentationEntry& entry) const
+  void GetDocumentation(cmDocumentationEntry& entry) const override
   {
     entry.Name = std::string(vs16generatorName);
     entry.Brief = "Generates Visual Studio 2019 project files.  "
@@ -401,6 +401,12 @@ bool cmGlobalVisualStudioVersionedGenerator::InitializeWindows(cmMakefile* mf)
   // If the Win 8.1 SDK is installed then we can select a SDK matching
   // the target Windows version.
   if (this->IsWin81SDKInstalled()) {
+    // VS 2019 does not default to 8.1 so specify it explicitly when needed.
+    if (this->Version >= cmGlobalVisualStudioGenerator::VS16 &&
+        !cmSystemTools::VersionCompareGreater(this->SystemVersion, "8.1")) {
+      this->SetWindowsTargetPlatformVersion("8.1", mf);
+      return true;
+    }
     return cmGlobalVisualStudio14Generator::InitializeWindows(mf);
   }
   // Otherwise we must choose a Win 10 SDK even if we are not targeting

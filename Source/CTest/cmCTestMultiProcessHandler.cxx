@@ -3,12 +3,12 @@
 #include "cmCTestMultiProcessHandler.h"
 
 #include "cmAffinity.h"
-#include "cmAlgorithms.h"
 #include "cmCTest.h"
 #include "cmCTestRunTest.h"
 #include "cmCTestTestHandler.h"
 #include "cmDuration.h"
 #include "cmListFileCache.h"
+#include "cmRange.h"
 #include "cmSystemTools.h"
 #include "cmWorkingDirectory.h"
 
@@ -109,8 +109,8 @@ void cmCTestMultiProcessHandler::SetTestLoad(unsigned long load)
                             fake_load_value)) {
     if (!cmSystemTools::StringToULong(fake_load_value.c_str(),
                                       &this->FakeLoadForTesting)) {
-      cmSystemTools::Error("Failed to parse fake load value: ",
-                           fake_load_value.c_str());
+      cmSystemTools::Error("Failed to parse fake load value: " +
+                           fake_load_value);
     }
   }
 }

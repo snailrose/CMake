@@ -5,10 +5,10 @@
 #include "cmsys/FStream.hxx"
 #include <stdio.h>
 
-#include "cmAlgorithms.h"
 #include "cmDuration.h"
 #include "cmMakefile.h"
 #include "cmMessageType.h"
+#include "cmRange.h"
 #include "cmState.h"
 #include "cmStateTypes.h"
 #include "cmSystemTools.h"
@@ -173,7 +173,7 @@ void cmTryRunCommand::RunExecutable(const std::string& runArgs,
     std::vector<std::string> emulatorWithArgs;
     cmSystemTools::ExpandListArgument(emulator, emulatorWithArgs);
     finalCommand +=
-      cmSystemTools::ConvertToRunCommandPath(emulatorWithArgs[0].c_str());
+      cmSystemTools::ConvertToRunCommandPath(emulatorWithArgs[0]);
     finalCommand += " ";
     for (std::string const& arg : cmMakeRange(emulatorWithArgs).advance(1)) {
       finalCommand += "\"";
@@ -182,8 +182,7 @@ void cmTryRunCommand::RunExecutable(const std::string& runArgs,
       finalCommand += " ";
     }
   }
-  finalCommand +=
-    cmSystemTools::ConvertToRunCommandPath(this->OutputFile.c_str());
+  finalCommand += cmSystemTools::ConvertToRunCommandPath(this->OutputFile);
   if (!runArgs.empty()) {
     finalCommand += runArgs;
   }

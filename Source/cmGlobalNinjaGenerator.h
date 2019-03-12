@@ -200,15 +200,12 @@ public:
   void EnableLanguage(std::vector<std::string> const& languages,
                       cmMakefile* mf, bool optional) override;
 
-  void GenerateBuildCommand(GeneratedMakeCommand& makeCommand,
-                            const std::string& makeProgram,
-                            const std::string& projectName,
-                            const std::string& projectDir,
-                            const std::string& targetName,
-                            const std::string& config, bool fast, int jobs,
-                            bool verbose,
-                            std::vector<std::string> const& makeOptions =
-                              std::vector<std::string>()) override;
+  std::vector<GeneratedMakeCommand> GenerateBuildCommand(
+    const std::string& makeProgram, const std::string& projectName,
+    const std::string& projectDir, std::vector<std::string> const& targetNames,
+    const std::string& config, bool fast, int jobs, bool verbose,
+    std::vector<std::string> const& makeOptions =
+      std::vector<std::string>()) override;
 
   // Setup target names
   const char* GetAllTargetName() const override { return "all"; }
@@ -365,7 +362,8 @@ public:
                        std::string const& arg_dd,
                        std::vector<std::string> const& arg_ddis,
                        std::string const& module_dir,
-                       std::vector<std::string> const& linked_target_dirs);
+                       std::vector<std::string> const& linked_target_dirs,
+                       std::string const& arg_lang);
 
 protected:
   void Generate() override;

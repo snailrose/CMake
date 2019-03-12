@@ -834,6 +834,10 @@ bool cmGlobalVisualStudioGenerator::TargetIsFortranOnly(
   if (linkLang && *linkLang) {
     languages.insert(linkLang);
   }
+
+  // Intel Fortran .vfproj files do support the resource compiler.
+  languages.erase("RC");
+
   return languages.size() == 1 && *languages.begin() == "Fortran";
 }
 
@@ -918,7 +922,7 @@ void cmGlobalVisualStudioGenerator::AddSymbolExportCommand(
   cmdl.push_back(objs_file);
   cmGeneratedFileStream fout(objs_file.c_str());
   if (!fout) {
-    cmSystemTools::Error("could not open ", objs_file.c_str());
+    cmSystemTools::Error("could not open " + objs_file);
     return;
   }
 

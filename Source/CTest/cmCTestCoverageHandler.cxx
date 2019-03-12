@@ -52,6 +52,8 @@ public:
     }
     cmsysProcess_Delete(this->Process);
   }
+  cmCTestRunProcess(const cmCTestRunProcess&) = delete;
+  cmCTestRunProcess& operator=(const cmCTestRunProcess&) = delete;
   void SetCommand(const char* command)
   {
     this->CommandLineStrings.clear();
@@ -786,6 +788,9 @@ struct cmCTestCoverageHandlerLocale
       cmSystemTools::UnsetEnv("LC_ALL");
     }
   }
+  cmCTestCoverageHandlerLocale(const cmCTestCoverageHandlerLocale&) = delete;
+  cmCTestCoverageHandlerLocale& operator=(
+    const cmCTestCoverageHandlerLocale&) = delete;
   std::string lc_all;
 };
 
@@ -999,7 +1004,7 @@ int cmCTestCoverageHandler::HandleGCovCoverage(
   static_cast<void>(locale_C);
 
   std::vector<std::string> basecovargs =
-    cmSystemTools::ParseArguments(gcovExtraFlags.c_str());
+    cmSystemTools::ParseArguments(gcovExtraFlags);
   basecovargs.insert(basecovargs.begin(), gcovCommand);
   basecovargs.emplace_back("-o");
 
@@ -1372,7 +1377,7 @@ int cmCTestCoverageHandler::HandleLCovCoverage(
   static_cast<void>(locale_C);
 
   std::vector<std::string> covargs =
-    cmSystemTools::ParseArguments(lcovExtraFlags.c_str());
+    cmSystemTools::ParseArguments(lcovExtraFlags);
   covargs.insert(covargs.begin(), lcovCommand);
   const std::string command = joinCommandLine(covargs);
 

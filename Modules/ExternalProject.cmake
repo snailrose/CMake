@@ -550,7 +550,8 @@ External Project Definition
       When enabled, the output of the test step is logged to files.
 
     ``LOG_MERGED_STDOUTERR <bool>``
-      When enabled, the output the step is not split by stdout and stderr.
+      When enabled, stdout and stderr will be merged for any step whose
+      output is being logged to files.
 
     ``LOG_OUTPUT_ON_FAILURE <bool>``
       This option only has an effect if at least one of the other ``LOG_<step>``
@@ -1643,7 +1644,6 @@ function(_ep_set_directories name)
     set(stamp_default "${base}/Stamp/${name}")
     set(install_default "${base}/Install/${name}")
   endif()
-  set(log_default "${stamp_default}")
   get_property(build_in_source TARGET ${name} PROPERTY _EP_BUILD_IN_SOURCE)
   if(build_in_source)
     get_property(have_binary_dir TARGET ${name} PROPERTY _EP_BINARY_DIR SET)
@@ -1653,7 +1653,9 @@ function(_ep_set_directories name)
     endif()
   endif()
   set(top "${CMAKE_CURRENT_BINARY_DIR}")
-  set(places stamp download source binary install tmp log)
+
+  # Apply defaults and convert to absolute paths.
+  set(places stamp download source binary install tmp)
   foreach(var ${places})
     string(TOUPPER "${var}" VAR)
     get_property(${var}_dir TARGET ${name} PROPERTY _EP_${VAR}_DIR)
@@ -1665,6 +1667,17 @@ function(_ep_set_directories name)
     endif()
     set_property(TARGET ${name} PROPERTY _EP_${VAR}_DIR "${${var}_dir}")
   endforeach()
+
+  # Special case for default log directory based on stamp directory.
+  get_property(log_dir TARGET ${name} PROPERTY _EP_LOG_DIR)
+  if(NOT log_dir)
+    get_property(log_dir TARGET ${name} PROPERTY _EP_STAMP_DIR)
+  endif()
+  if(NOT IS_ABSOLUTE "${log_dir}")
+    get_filename_component(log_dir "${top}/${log_dir}" ABSOLUTE)
+  endif()
+  set_property(TARGET ${name} PROPERTY _EP_LOG_DIR "${log_dir}")
+
   get_property(source_subdir TARGET ${name} PROPERTY _EP_SOURCE_SUBDIR)
   if(NOT source_subdir)
     set_property(TARGET ${name} PROPERTY _EP_SOURCE_SUBDIR "")
