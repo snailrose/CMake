@@ -119,8 +119,8 @@ private:
                                 const std::string& name);
   bool CreateGroups(std::vector<cmLocalGenerator*>& generators);
   std::string XCodeEscapePath(const std::string& p);
-  std::string RelativeToSource(const char* p);
-  std::string RelativeToBinary(const char* p);
+  std::string RelativeToSource(const std::string& p);
+  std::string RelativeToBinary(const std::string& p);
   std::string ConvertToRelativeForMake(std::string const& p);
   void CreateCustomCommands(cmXCodeObject* buildPhases,
                             cmXCodeObject* sourceBuildPhase,
@@ -186,11 +186,12 @@ private:
                           std::vector<cmLocalGenerator*>& generators);
   void OutputXCodeProject(cmLocalGenerator* root,
                           std::vector<cmLocalGenerator*>& generators);
-  bool IsGeneratingScheme(cmLocalGenerator* root) const;
   // Write shared scheme files for all the native targets
-  void OutputXCodeSharedSchemes(const std::string& xcProjDir);
+  //  return true if any were written
+  bool OutputXCodeSharedSchemes(const std::string& xcProjDir,
+                                cmLocalGenerator* root);
   void OutputXCodeWorkspaceSettings(const std::string& xcProjDir,
-                                    cmLocalGenerator* root);
+                                    bool hasGeneratedSchemes);
   void WriteXCodePBXProj(std::ostream& fout, cmLocalGenerator* root,
                          std::vector<cmLocalGenerator*>& generators);
   cmXCodeObject* CreateXCodeFileReferenceFromPath(const std::string& fullpath,

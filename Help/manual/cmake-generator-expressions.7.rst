@@ -121,6 +121,9 @@ Variable Queries
 ``$<CXX_COMPILER_ID:compiler_id>``
   ``1`` if the CMake-id of the CXX compiler matches ``compiler_id``,
   otherwise ``0``.
+``$<CUDA_COMPILER_ID:compiler_id>``
+  ``1`` if the CMake-id of the CUDA compiler matches ``compiler_id``,
+  otherwise ``0``.
   See also the :variable:`CMAKE_<LANG>_COMPILER_ID` variable.
 ``$<Fortran_COMPILER_ID:compiler_id>``
   ``1`` if the CMake-id of the Fortran compiler matches ``compiler_id``,
@@ -130,6 +133,9 @@ Variable Queries
   ``1`` if the version of the C compiler matches ``version``, otherwise ``0``.
   See also the :variable:`CMAKE_<LANG>_COMPILER_VERSION` variable.
 ``$<CXX_COMPILER_VERSION:version>``
+  ``1`` if the version of the CXX compiler matches ``version``, otherwise ``0``.
+  See also the :variable:`CMAKE_<LANG>_COMPILER_VERSION` variable.
+``$<CUDA_COMPILER_VERSION:version>``
   ``1`` if the version of the CXX compiler matches ``version``, otherwise ``0``.
   See also the :variable:`CMAKE_<LANG>_COMPILER_VERSION` variable.
 ``$<Fortran_COMPILER_VERSION:version>``
@@ -346,6 +352,9 @@ Variable Queries
 ``$<CXX_COMPILER_ID>``
   The CMake-id of the CXX compiler used.
   See also the :variable:`CMAKE_<LANG>_COMPILER_ID` variable.
+``$<CUDA_COMPILER_ID>``
+  The CMake-id of the CUDA compiler used.
+  See also the :variable:`CMAKE_<LANG>_COMPILER_ID` variable.
 ``$<Fortran_COMPILER_ID>``
   The CMake-id of the Fortran compiler used.
   See also the :variable:`CMAKE_<LANG>_COMPILER_ID` variable.
@@ -354,6 +363,9 @@ Variable Queries
   See also the :variable:`CMAKE_<LANG>_COMPILER_VERSION` variable.
 ``$<CXX_COMPILER_VERSION>``
   The version of the CXX compiler used.
+  See also the :variable:`CMAKE_<LANG>_COMPILER_VERSION` variable.
+``$<CUDA_COMPILER_VERSION>``
+  The version of the CUDA compiler used.
   See also the :variable:`CMAKE_<LANG>_COMPILER_VERSION` variable.
 ``$<Fortran_COMPILER_VERSION>``
   The version of the Fortran compiler used.
@@ -455,6 +467,11 @@ Output-Related Expressions
   Content of ``...`` converted to shell path style. For example, slashes are
   converted to backslashes in Windows shells and drive letters are converted
   to posix paths in MSYS shells. The ``...`` must be an absolute path.
+  The ``...`` may be a :ref:`semicolon-separated list <CMake Language Lists>`
+  of paths, in which case each path is converted individually and a result
+  list is generated using the shell path separator (``:`` on POSIX and
+  ``;`` on Windows).  Be sure to enclose the argument containing this genex
+  in double quotes in CMake source code so that ``;`` does not split arguments.
 
 Debugging
 =========

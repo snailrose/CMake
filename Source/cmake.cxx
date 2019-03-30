@@ -9,7 +9,7 @@
 #include "cmDocumentationFormatter.h"
 #include "cmDuration.h"
 #include "cmExternalMakefileProjectGenerator.h"
-#include "cmFileTimeComparison.h"
+#include "cmFileTimeCache.h"
 #include "cmGeneratorTarget.h"
 #include "cmGlobalGenerator.h"
 #include "cmGlobalGeneratorFactory.h"
@@ -48,7 +48,6 @@
 #if defined(_WIN32) && !defined(__CYGWIN__)
 #  if !defined(CMAKE_BOOT_MINGW)
 #    include "cmGlobalBorlandMakefileGenerator.h"
-#    include "cmGlobalGhsMultiGenerator.h"
 #    include "cmGlobalJOMMakefileGenerator.h"
 #    include "cmGlobalNMakeMakefileGenerator.h"
 #    include "cmGlobalVisualStudio10Generator.h"
@@ -82,6 +81,10 @@
 
 #ifdef CMAKE_USE_ECLIPSE
 #  include "cmExtraEclipseCDT4Generator.h"
+#endif
+
+#if defined(__linux__) || defined(_WIN32)
+#  include "cmGlobalGhsMultiGenerator.h"
 #endif
 
 #if defined(__APPLE__)
@@ -138,7 +141,7 @@ cmake::cmake(Role role, cmState::Mode mode)
   this->DebugOutput = false;
   this->DebugTryCompile = false;
   this->ClearBuildSystem = false;
-  this->FileComparison = new cmFileTimeComparison;
+  this->FileTimeCache = new cmFileTimeCache;
 
   this->State = new cmState;
   this->State->SetMode(mode);
@@ -222,7 +225,7 @@ cmake::~cmake()
 #ifdef CMAKE_BUILD_WITH_CMAKE
   delete this->VariableWatch;
 #endif
-  delete this->FileComparison;
+  delete this->FileTimeCache;
 }
 
 #if defined(CMAKE_BUILD_WITH_CMAKE)
@@ -1833,13 +1836,15 @@ void cmake::AddDefaultGenerators()
   this->Generators.push_back(cmGlobalBorlandMakefileGenerator::NewFactory());
   this->Generators.push_back(cmGlobalNMakeMakefileGenerator::NewFactory());
   this->Generators.push_back(cmGlobalJOMMakefileGenerator::NewFactory());
-  this->Generators.push_back(cmGlobalGhsMultiGenerator::NewFactory());
 #  endif
   this->Generators.push_back(cmGlobalMSYSMakefileGenerator::NewFactory());
   this->Generators.push_back(cmGlobalMinGWMakefileGenerator::NewFactory());
 #endif
   this->Generators.push_back(cmGlobalUnixMakefileGenerator3::NewFactory());
 #if defined(CMAKE_BUILD_WITH_CMAKE)
+#  if defined(__linux__) || defined(_WIN32)
+  this->Generators.push_back(cmGlobalGhsMultiGenerator::NewFactory());
+#  endif
   this->Generators.push_back(cmGlobalNinjaGenerator::NewFactory());
 #endif
 #if defined(CMAKE_USE_WMAKE)
@@ -2139,7 +2144,7 @@ int cmake::CheckBuildSystem()
   std::string dep_newest = *dep++;
   for (; dep != depends.end(); ++dep) {
     int result = 0;
-    if (this->FileComparison->FileTimeCompare(dep_newest, *dep, &result)) {
+    if (this->FileTimeCache->Compare(dep_newest, *dep, &result)) {
       if (result < 0) {
         dep_newest = *dep;
       }
@@ -2158,7 +2163,7 @@ int cmake::CheckBuildSystem()
   std::string out_oldest = *out++;
   for (; out != outputs.end(); ++out) {
     int result = 0;
-    if (this->FileComparison->FileTimeCompare(out_oldest, *out, &result)) {
+    if (this->FileTimeCache->Compare(out_oldest, *out, &result)) {
       if (result > 0) {
         out_oldest = *out;
       }
@@ -2175,8 +2180,7 @@ int cmake::CheckBuildSystem()
   // If any output is older than any dependency then rerun.
   {
     int result = 0;
-    if (!this->FileComparison->FileTimeCompare(out_oldest, dep_newest,
-                                               &result) ||
+    if (!this->FileTimeCache->Compare(out_oldest, dep_newest, &result) ||
         result < 0) {
       if (verbose) {
         std::ostringstream msg;
@@ -2431,20 +2435,22 @@ static bool cmakeCheckStampFile(const std::string& stampName)
   }
 
   // Compare the stamp dependencies against the dependency file itself.
-  cmFileTimeComparison ftc;
-  std::string dep;
-  while (cmSystemTools::GetLineFromStream(fin, dep)) {
-    int result;
-    if (!dep.empty() && dep[0] != '#' &&
-        (!ftc.FileTimeCompare(stampDepends, dep, &result) || result < 0)) {
-      // The stamp depends file is older than this dependency.  The
-      // build system is really out of date.
-      std::cout << "CMake is re-running because " << stampName
-                << " is out-of-date.\n";
-      std::cout << "  the file '" << dep << "'\n";
-      std::cout << "  is newer than '" << stampDepends << "'\n";
-      std::cout << "  result='" << result << "'\n";
-      return false;
+  {
+    cmFileTimeCache ftc;
+    std::string dep;
+    while (cmSystemTools::GetLineFromStream(fin, dep)) {
+      int result;
+      if (!dep.empty() && dep[0] != '#' &&
+          (!ftc.Compare(stampDepends, dep, &result) || result < 0)) {
+        // The stamp depends file is older than this dependency.  The
+        // build system is really out of date.
+        std::cout << "CMake is re-running because " << stampName
+                  << " is out-of-date.\n";
+        std::cout << "  the file '" << dep << "'\n";
+        std::cout << "  is newer than '" << stampDepends << "'\n";
+        std::cout << "  result='" << result << "'\n";
+        return false;
+      }
     }
   }
 

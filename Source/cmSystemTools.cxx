@@ -1510,36 +1510,6 @@ std::string cmSystemTools::ForceToRelativePath(std::string const& local_path,
   return relative;
 }
 
-std::string cmSystemTools::CollapseCombinedPath(std::string const& dir,
-                                                std::string const& file)
-{
-  if (dir.empty() || dir == ".") {
-    return file;
-  }
-
-  std::vector<std::string> dirComponents;
-  std::vector<std::string> fileComponents;
-  cmSystemTools::SplitPath(dir, dirComponents);
-  cmSystemTools::SplitPath(file, fileComponents);
-
-  if (fileComponents.empty()) {
-    return dir;
-  }
-  if (!fileComponents[0].empty()) {
-    // File is not a relative path.
-    return file;
-  }
-
-  std::vector<std::string>::iterator i = fileComponents.begin() + 1;
-  while (i != fileComponents.end() && *i == ".." && dirComponents.size() > 1) {
-    ++i;                      // Remove ".." file component.
-    dirComponents.pop_back(); // Remove last dir component.
-  }
-
-  dirComponents.insert(dirComponents.end(), i, fileComponents.end());
-  return cmSystemTools::JoinPath(dirComponents);
-}
-
 #ifdef CMAKE_BUILD_WITH_CMAKE
 bool cmSystemTools::UnsetEnv(const char* value)
 {
@@ -1658,20 +1628,18 @@ bool cmSystemTools::CreateTar(const char* outFileName,
 
   a.SetMTime(mtime);
   a.SetVerbose(verbose);
+  bool tarCreatedSuccessfully = true;
   for (auto path : files) {
     if (cmSystemTools::FileIsFullPath(path)) {
       // Get the relative path to the file.
       path = cmSystemTools::RelativePath(cwd, path);
     }
     if (!a.Add(path)) {
-      break;
+      cmSystemTools::Error(a.GetError());
+      tarCreatedSuccessfully = false;
     }
   }
-  if (!a) {
-    cmSystemTools::Error(a.GetError());
-    return false;
-  }
-  return true;
+  return tarCreatedSuccessfully;
 #else
   (void)outFileName;
   (void)files;

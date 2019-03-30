@@ -139,7 +139,7 @@ macro(CMAKE_HANDLE_SYSTEM_LIBRARIES)
 
   # Allow the user to enable/disable all system utility library options by
   # defining CMAKE_USE_SYSTEM_LIBRARIES or CMAKE_USE_SYSTEM_LIBRARY_${util}.
-  set(UTILITIES BZIP2 CURL EXPAT FORM JSONCPP LIBARCHIVE LIBLZMA LIBRHASH LIBUV ZLIB)
+  set(UTILITIES BZIP2 CURL EXPAT FORM JSONCPP LIBARCHIVE LIBLZMA LIBRHASH LIBUV ZLIB ZSTD)
   foreach(util ${UTILITIES})
     if(NOT DEFINED CMAKE_USE_SYSTEM_LIBRARY_${util}
         AND DEFINED CMAKE_USE_SYSTEM_LIBRARIES)
@@ -173,6 +173,8 @@ macro(CMAKE_HANDLE_SYSTEM_LIBRARIES)
     "${CMAKE_USE_SYSTEM_LIBRARY_ZLIB}" "NOT CMAKE_USE_SYSTEM_LIBARCHIVE;NOT CMAKE_USE_SYSTEM_CURL" ON)
   CMAKE_DEPENDENT_OPTION(CMAKE_USE_SYSTEM_BZIP2 "Use system-installed bzip2"
     "${CMAKE_USE_SYSTEM_LIBRARY_BZIP2}" "NOT CMAKE_USE_SYSTEM_LIBARCHIVE" ON)
+  CMAKE_DEPENDENT_OPTION(CMAKE_USE_SYSTEM_ZSTD "Use system-installed zstd"
+    "${CMAKE_USE_SYSTEM_LIBRARY_ZSTD}" "NOT CMAKE_USE_SYSTEM_LIBARCHIVE" ON)
   CMAKE_DEPENDENT_OPTION(CMAKE_USE_SYSTEM_LIBLZMA "Use system-installed liblzma"
     "${CMAKE_USE_SYSTEM_LIBRARY_LIBLZMA}" "NOT CMAKE_USE_SYSTEM_LIBARCHIVE" ON)
   option(CMAKE_USE_SYSTEM_FORM "Use system-installed libform" "${CMAKE_USE_SYSTEM_LIBRARY_FORM}")
@@ -476,6 +478,17 @@ macro (CMAKE_BUILD_UTILITIES)
   endif()
 
   #---------------------------------------------------------------------
+  # Build or use system zstd for libarchive.
+  if(NOT CMAKE_USE_SYSTEM_LIBARCHIVE)
+    if(NOT CMAKE_USE_SYSTEM_ZSTD)
+      set(ZSTD_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Utilities/cmzstd")
+      set(ZSTD_LIBRARY cmzstd)
+      add_subdirectory(Utilities/cmzstd)
+      CMAKE_SET_TARGET_FOLDER(cmzstd "Utilities/3rdParty")
+    endif()
+  endif()
+
+  #---------------------------------------------------------------------
   # Build or use system liblzma for libarchive.
   if(NOT CMAKE_USE_SYSTEM_LIBARCHIVE)
     if(CMAKE_USE_SYSTEM_LIBLZMA)
@@ -537,6 +550,10 @@ macro (CMAKE_BUILD_UTILITIES)
     if(NOT JsonCpp_FOUND)
       message(FATAL_ERROR
         "CMAKE_USE_SYSTEM_JSONCPP is ON but a JsonCpp is not found!")
+    endif()
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+      set_property(TARGET JsonCpp::JsonCpp APPEND PROPERTY
+        INTERFACE_COMPILE_OPTIONS -Wno-deprecated-declarations)
     endif()
     set(CMAKE_JSONCPP_LIBRARIES JsonCpp::JsonCpp)
   else()

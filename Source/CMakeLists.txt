@@ -224,6 +224,10 @@ set(SRCS
   cmFileAPICodemodel.h
   cmFileAPICMakeFiles.cxx
   cmFileAPICMakeFiles.h
+  cmFileCopier.cxx
+  cmFileCopier.h
+  cmFileInstaller.cxx
+  cmFileInstaller.h
   cmFileLock.cxx
   cmFileLock.h
   cmFileLockPool.cxx
@@ -232,8 +236,10 @@ set(SRCS
   cmFileLockResult.h
   cmFilePathChecksum.cxx
   cmFilePathChecksum.h
-  cmFileTimeComparison.cxx
-  cmFileTimeComparison.h
+  cmFileTime.cxx
+  cmFileTime.h
+  cmFileTimeCache.cxx
+  cmFileTimeCache.h
   cmFortranParserImpl.cxx
   cmFSPermissions.cxx
   cmFSPermissions.h
@@ -723,14 +729,6 @@ if (WIN32)
       cmVisualStudioSlnParser.cxx
       cmVisualStudioWCEPlatformParser.h
       cmVisualStudioWCEPlatformParser.cxx
-      cmGlobalGhsMultiGenerator.cxx
-      cmGlobalGhsMultiGenerator.h
-      cmLocalGhsMultiGenerator.cxx
-      cmLocalGhsMultiGenerator.h
-      cmGhsMultiTargetGenerator.cxx
-      cmGhsMultiTargetGenerator.h
-      cmGhsMultiGpj.cxx
-      cmGhsMultiGpj.h
       cmVSSetupHelper.cxx
       cmVSSetupHelper.h
       )
@@ -749,6 +747,22 @@ if(WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
     cmGlobalWatcomWMakeGenerator.h
     )
 endif()
+
+# GHS support
+# Works only for windows and linux
+if(WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  set(SRCS ${SRCS}
+      cmGlobalGhsMultiGenerator.cxx
+      cmGlobalGhsMultiGenerator.h
+      cmLocalGhsMultiGenerator.cxx
+      cmLocalGhsMultiGenerator.h
+      cmGhsMultiTargetGenerator.cxx
+      cmGhsMultiTargetGenerator.h
+      cmGhsMultiGpj.cxx
+      cmGhsMultiGpj.h
+    )
+endif()
+
 
 # Ninja support
 set(SRCS ${SRCS}
@@ -792,7 +806,7 @@ foreach(check
   else()
     set(CMake_${check} 0)
   endif()
-  set_property(SOURCE cmFileTimeComparison.cxx APPEND PROPERTY
+  set_property(SOURCE cmFileTime.cxx APPEND PROPERTY
     COMPILE_DEFINITIONS CMake_${check}=${CMake_${check}})
 endforeach()
 

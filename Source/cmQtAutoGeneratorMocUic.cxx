@@ -27,7 +27,7 @@
 std::string cmQtAutoGeneratorMocUic::BaseSettingsT::AbsoluteBuildPath(
   std::string const& relativePath) const
 {
-  return FileSys->CollapseCombinedPath(AutogenBuildDir, relativePath);
+  return FileSys->CollapseFullPath(relativePath, AutogenBuildDir);
 }
 
 /**
@@ -1107,13 +1107,17 @@ void cmQtAutoGeneratorMocUic::WorkerT::UVProcessStart(uv_async_t* handle)
       wrk.Process_->start(handle->loop, [&wrk] { wrk.UVProcessFinished(); });
     }
   }
+
+  if (!wrk.Process_->IsStarted()) {
+    wrk.UVProcessFinished();
+  }
 }
 
 void cmQtAutoGeneratorMocUic::WorkerT::UVProcessFinished()
 {
   {
     std::lock_guard<std::mutex> lock(ProcessMutex_);
-    if (Process_ && Process_->IsFinished()) {
+    if (Process_ && (Process_->IsFinished() || !Process_->IsStarted())) {
       Process_.reset();
     }
   }

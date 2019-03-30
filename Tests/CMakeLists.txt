@@ -1421,6 +1421,10 @@ ${CMake_BINARY_DIR}/bin/cmake -DDIR=dev -P ${CMake_SOURCE_DIR}/Utilities/Release
     add_subdirectory(FindDoxygen)
   endif()
 
+  if(CMake_TEST_FindEnvModules)
+    add_subdirectory(FindEnvModules)
+  endif()
+
   if(CMake_TEST_FindEXPAT)
     add_subdirectory(FindEXPAT)
   endif()
@@ -1445,6 +1449,10 @@ ${CMake_BINARY_DIR}/bin/cmake -DDIR=dev -P ${CMake_SOURCE_DIR}/Utilities/Release
     add_subdirectory(FindGit)
   endif()
 
+  if(CMake_TEST_FindGLEW)
+    add_subdirectory(FindGLEW)
+  endif()
+
   if(CMake_TEST_FindGSL)
     add_subdirectory(FindGSL)
   endif()
@@ -1452,6 +1460,10 @@ ${CMake_BINARY_DIR}/bin/cmake -DDIR=dev -P ${CMake_SOURCE_DIR}/Utilities/Release
   if(CMake_TEST_FindGTest)
     add_subdirectory(FindGTest)
     add_subdirectory(GoogleTest)
+  endif()
+
+  if(CMake_TEST_FindGTK2)
+    add_subdirectory(FindGTK2)
   endif()
 
   if(CMake_TEST_FindIconv)
@@ -1595,11 +1607,6 @@ ${CMake_BINARY_DIR}/bin/cmake -DDIR=dev -P ${CMake_SOURCE_DIR}/Utilities/Release
     ADD_TEST_MACRO(FindMatlab.failure_reports   ${CMAKE_CTEST_COMMAND} -V -C $<CONFIGURATION>)
     set(FindMatlab.r2018a_check_BUILD_OPTIONS ${FindMatlab_additional_test_options})
     ADD_TEST_MACRO(FindMatlab.r2018a_check   ${CMAKE_CTEST_COMMAND} -V -C $<CONFIGURATION>)
-  endif()
-
-  find_package(GTK2 QUIET)
-  if(GTK2_FOUND)
-    add_subdirectory(FindGTK2)
   endif()
 
   add_test(ExternalProject ${CMAKE_CTEST_COMMAND}
@@ -2317,6 +2324,7 @@ ${CMake_BINARY_DIR}/bin/cmake -DDIR=dev -P ${CMake_SOURCE_DIR}/Utilities/Release
         --build-generator "Green Hills MULTI"
         --build-project test
         --build-config $<CONFIGURATION>
+        --force-new-ctest-process
         --build-options ${ghs_target_arch} ${ghs_toolset_name} ${ghs_toolset_root} ${ghs_target_platform}
           ${ghs_os_root} ${ghs_os_dir} ${ghs_bsp_name} ${_ghs_build_opts} ${_ghs_toolset_extra}
           ${_ghs_test_command}

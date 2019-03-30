@@ -16,6 +16,9 @@ Synopsis
  `Build a Project`_
   cmake --build <dir> [<options>] [-- <build-tool-options>]
 
+ `Install a Project`_
+  cmake --install <dir> [<options>]
+
  `Open a Project`_
   cmake --open <dir>
 
@@ -39,8 +42,8 @@ buildsystem generator CMake.  The above `Synopsis`_ lists various actions
 the tool can perform as described in sections below.
 
 To build a software project with CMake, `Generate a Project Buildsystem`_.
-Optionally use **cmake** to `Build a Project`_ or just run the
-corresponding build tool (e.g. ``make``) directly.  **cmake** can also
+Optionally use **cmake** to `Build a Project`_, `Install a Project`_ or just
+run the corresponding build tool (e.g. ``make``) directly.  **cmake** can also
 be used to `View Help`_.
 
 The other actions are meant for use by software developers writing
@@ -269,14 +272,14 @@ following options:
 ``--build <dir>``
   Project binary directory to be built.  This is required and must be first.
 
-``-j [<jobs>], --parallel [<jobs>]``
+``--parallel [<jobs>], -j [<jobs>]``
   The maximum number of concurrent processes to use when building.
   If ``<jobs>`` is omitted the native build tool's default number is used.
 
   The :envvar:`CMAKE_BUILD_PARALLEL_LEVEL` environment variable, if set,
   specifies a default parallel level when this option is not given.
 
-``--target <tgt>...``
+``--target <tgt>..., -t <tgt>...``
   Build ``<tgt>`` instead of default targets.  May be specified multiple times.
 
 ``--config <cfg>``
@@ -289,7 +292,7 @@ following options:
 ``--use-stderr``
   Ignored.  Behavior is default in CMake >= 3.0.
 
-``-v, --verbose``
+``--verbose, -v``
   Enable verbose output - if supported - including the build commands to be
   executed.
 
@@ -302,6 +305,41 @@ following options:
 
 Run ``cmake --build`` with no options for quick help.
 
+Install a Project
+=================
+
+CMake provides a command-line signature to install an already-generated
+project binary tree:
+
+.. code-block:: shell
+
+  cmake --install <dir> [<options>]
+
+This may be used after building a project to run installation without
+using the generated build system or the native build tool.
+The options are:
+
+``--install <dir>``
+  Project binary directory to install. This is required and must be first.
+
+``--config <cfg>``
+  For multi-configuration tools, choose configuration ``<cfg>``.
+
+``--component <comp>``
+  Component-based install. Only install component ``<comp>``.
+
+``--prefix <prefix>``
+  The installation prefix CMAKE_INSTALL_PREFIX.
+
+``--strip``
+  Strip before installing by setting CMAKE_INSTALL_DO_STRIP.
+
+``-v, --verbose``
+  Enable verbose output.
+
+  This option can be omitted if :envvar:`VERBOSE` environment variable is set.
+
+Run ``cmake --install`` with no options for quick help.
 
 Open a Project
 ==============
@@ -390,16 +428,20 @@ Available commands are:
   Copy files to ``<destination>`` (either file or directory).
   If multiple files are specified, the ``<destination>`` must be
   directory and it must exist. Wildcards are not supported.
+  ``copy`` does follow symlinks. That means it does not copy symlinks,
+  but the files or directories it point to.
 
 ``copy_directory <dir>... <destination>``
   Copy directories to ``<destination>`` directory.
   If ``<destination>`` directory does not exist it will be created.
+  ``copy_directory`` does follow symlinks.
 
 ``copy_if_different <file>... <destination>``
   Copy files to ``<destination>`` (either file or directory) if
   they have changed.
   If multiple files are specified, the ``<destination>`` must be
   directory and it must exist.
+  ``copy_if_different`` does follow symlinks.
 
 ``echo [<string>...]``
   Displays arguments as text.
@@ -459,13 +501,16 @@ Available commands are:
   exist, the command returns a non-zero exit code, but no message
   is logged. The ``-f`` option changes the behavior to return a
   zero exit code (i.e. success) in such situations instead.
+  ``remove`` does not follow symlinks. That means it remove only symlinks
+  and not files it point to.
 
 ``remove_directory <dir>``
   Remove a directory and its contents.  If a directory does
   not exist it will be silently ignored.
 
 ``rename <oldname> <newname>``
-  Rename a file or directory (on one volume).
+  Rename a file or directory (on one volume). If file with the ``<newname>`` name
+  already exists, then it will be silently replaced.
 
 ``server``
   Launch :manual:`cmake-server(7)` mode.
@@ -476,6 +521,21 @@ Available commands are:
 ``tar [cxt][vf][zjJ] file.tar [<options>] [--] [<file>...]``
   Create or extract a tar or zip archive.  Options are:
 
+  ``c``
+    Create a new archive containing the specified files.
+    If used, the <file> argument is mandatory.
+  ``x``
+    Extract to disk from the archive.
+  ``t``
+    List archive contents to stdout.
+  ``v``
+    Produce verbose output.
+  ``z``
+    Compress the resulting archive with gzip.
+  ``j``
+    Compress the resulting archive with bzip2.
+  ``J``
+    Compress the resulting archive with XZ.
   ``--``
     Stop interpreting options and treat all remaining arguments
     as file names even if they start in ``-``.
@@ -494,10 +554,11 @@ Available commands are:
 ``time <command> [<args>...]``
   Run command and display elapsed time.
 
-``touch <file>``
-  Touch a file.
+``touch <file>...``
+  Creates ``<file>`` if file do not exist.
+  If ``<file>`` exists, it is changing ``<file>`` access and modification times.
 
-``touch_nocreate <file>``
+``touch_nocreate <file>...``
   Touch a file if it exists but do not create it.  If a file does
   not exist it will be silently ignored.
 

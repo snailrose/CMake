@@ -15,6 +15,8 @@
 #include "cmMessageType.h"
 #include "cmOutputConverter.h"
 #include "cmPolicies.h"
+#include "cmState.h"
+#include "cmStateSnapshot.h"
 #include "cmStateTypes.h"
 #include "cmSystemTools.h"
 #include "cmTarget.h"
@@ -690,6 +692,28 @@ static const struct CXXCompilerIdNode : public CompilerIdNode
   }
 } cxxCompilerIdNode;
 
+static const struct CUDACompilerIdNode : public CompilerIdNode
+{
+  CUDACompilerIdNode() {} // NOLINT(modernize-use-equals-default)
+
+  std::string Evaluate(
+    const std::vector<std::string>& parameters,
+    cmGeneratorExpressionContext* context,
+    const GeneratorExpressionContent* content,
+    cmGeneratorExpressionDAGChecker* dagChecker) const override
+  {
+    if (!context->HeadTarget) {
+      reportError(
+        context, content->GetOriginalExpression(),
+        "$<CUDA_COMPILER_ID> may only be used with binary targets.  It may "
+        "not be used with add_custom_command or add_custom_target.");
+      return std::string();
+    }
+    return this->EvaluateWithLanguage(parameters, context, content, dagChecker,
+                                      "CUDA");
+  }
+} cudaCompilerIdNode;
+
 static const struct FortranCompilerIdNode : public CompilerIdNode
 {
   FortranCompilerIdNode() {} // NOLINT(modernize-use-equals-default)
@@ -771,9 +795,9 @@ static const struct CCompilerVersionNode : public CompilerVersionNode
   }
 } cCompilerVersionNode;
 
-static const struct CxxCompilerVersionNode : public CompilerVersionNode
+static const struct CXXCompilerVersionNode : public CompilerVersionNode
 {
-  CxxCompilerVersionNode() {} // NOLINT(modernize-use-equals-default)
+  CXXCompilerVersionNode() {} // NOLINT(modernize-use-equals-default)
 
   std::string Evaluate(
     const std::vector<std::string>& parameters,
@@ -792,6 +816,28 @@ static const struct CxxCompilerVersionNode : public CompilerVersionNode
                                       "CXX");
   }
 } cxxCompilerVersionNode;
+
+static const struct CUDACompilerVersionNode : public CompilerVersionNode
+{
+  CUDACompilerVersionNode() {} // NOLINT(modernize-use-equals-default)
+
+  std::string Evaluate(
+    const std::vector<std::string>& parameters,
+    cmGeneratorExpressionContext* context,
+    const GeneratorExpressionContent* content,
+    cmGeneratorExpressionDAGChecker* dagChecker) const override
+  {
+    if (!context->HeadTarget) {
+      reportError(
+        context, content->GetOriginalExpression(),
+        "$<CUDA_COMPILER_VERSION> may only be used with binary targets.  It "
+        "may not be used with add_custom_command or add_custom_target.");
+      return std::string();
+    }
+    return this->EvaluateWithLanguage(parameters, context, content, dagChecker,
+                                      "CUDA");
+  }
+} cudaCompilerVersionNode;
 
 static const struct FortranCompilerVersionNode : public CompilerVersionNode
 {
@@ -2045,13 +2091,27 @@ static const struct ShellPathNode : public cmGeneratorExpressionNode
     const GeneratorExpressionContent* content,
     cmGeneratorExpressionDAGChecker* /*dagChecker*/) const override
   {
-    if (!cmSystemTools::FileIsFullPath(parameters.front())) {
+    std::vector<std::string> listIn;
+    cmSystemTools::ExpandListArgument(parameters.front(), listIn);
+    if (listIn.empty()) {
       reportError(context, content->GetOriginalExpression(),
-                  "\"" + parameters.front() + "\" is not an absolute path.");
+                  "\"\" is not an absolute path.");
       return std::string();
     }
-    cmOutputConverter converter(context->LG->GetStateSnapshot());
-    return converter.ConvertDirectorySeparatorsForShell(parameters.front());
+    cmStateSnapshot snapshot = context->LG->GetStateSnapshot();
+    cmOutputConverter converter(snapshot);
+    const char* separator = snapshot.GetState()->UseWindowsShell() ? ";" : ":";
+    std::vector<std::string> listOut;
+    listOut.reserve(listIn.size());
+    for (auto const& in : listIn) {
+      if (!cmSystemTools::FileIsFullPath(in)) {
+        reportError(context, content->GetOriginalExpression(),
+                    "\"" + in + "\" is not an absolute path.");
+        return std::string();
+      }
+      listOut.emplace_back(converter.ConvertDirectorySeparatorsForShell(in));
+    }
+    return cmJoin(listOut, separator);
   }
 } shellPathNode;
 
@@ -2066,6 +2126,7 @@ const cmGeneratorExpressionNode* cmGeneratorExpressionNode::GetNode(
     { "NOT", &notNode },
     { "C_COMPILER_ID", &cCompilerIdNode },
     { "CXX_COMPILER_ID", &cxxCompilerIdNode },
+    { "CUDA_COMPILER_ID", &cudaCompilerIdNode },
     { "Fortran_COMPILER_ID", &fortranCompilerIdNode },
     { "VERSION_GREATER", &versionGreaterNode },
     { "VERSION_GREATER_EQUAL", &versionGreaterEqNode },
@@ -2074,6 +2135,7 @@ const cmGeneratorExpressionNode* cmGeneratorExpressionNode::GetNode(
     { "VERSION_EQUAL", &versionEqualNode },
     { "C_COMPILER_VERSION", &cCompilerVersionNode },
     { "CXX_COMPILER_VERSION", &cxxCompilerVersionNode },
+    { "CUDA_COMPILER_VERSION", &cudaCompilerVersionNode },
     { "Fortran_COMPILER_VERSION", &fortranCompilerVersionNode },
     { "PLATFORM_ID", &platformIdNode },
     { "COMPILE_FEATURES", &compileFeaturesNode },

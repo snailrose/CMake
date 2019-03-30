@@ -54,6 +54,14 @@ run_cmake_command(build-bad-dir
 run_cmake_command(build-bad-generator
   ${CMAKE_COMMAND} --build ${RunCMake_SOURCE_DIR}/cache-bad-generator)
 
+run_cmake_command(install-no-dir
+  ${CMAKE_COMMAND} --install)
+run_cmake_command(install-bad-dir
+  ${CMAKE_COMMAND} --install dir-does-not-exist)
+run_cmake_command(install-options-to-vars
+  ${CMAKE_COMMAND} --install ${RunCMake_SOURCE_DIR}/dir-install-options-to-vars
+  --strip --prefix /var/test --config sample --component pack)
+
 run_cmake_command(cache-bad-entry
   ${CMAKE_COMMAND} --build ${RunCMake_SOURCE_DIR}/cache-bad-entry/)
 run_cmake_command(cache-empty-entry
@@ -106,7 +114,7 @@ function(run_BuildDir)
   run_cmake_command(BuildDir--build ${CMAKE_COMMAND} -E chdir ..
     ${CMAKE_COMMAND} --build BuildDir-build --target CustomTarget)
   run_cmake_command(BuildDir--build-multiple-targets ${CMAKE_COMMAND} -E chdir ..
-    ${CMAKE_COMMAND} --build BuildDir-build --target CustomTarget2 --target CustomTarget3)
+    ${CMAKE_COMMAND} --build BuildDir-build -t CustomTarget2 --target CustomTarget3)
   run_cmake_command(BuildDir--build-multiple-targets-jobs ${CMAKE_COMMAND} -E chdir ..
     ${CMAKE_COMMAND} --build BuildDir-build --target CustomTarget CustomTarget2 -j2 --target CustomTarget3)
   run_cmake_command(BuildDir--build-multiple-targets-with-clean-first ${CMAKE_COMMAND} -E chdir ..

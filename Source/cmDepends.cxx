@@ -2,7 +2,7 @@
    file Copyright.txt or https://cmake.org/licensing for details.  */
 #include "cmDepends.h"
 
-#include "cmFileTimeComparison.h"
+#include "cmFileTimeCache.h"
 #include "cmGeneratedFileStream.h"
 #include "cmLocalGenerator.h"
 #include "cmMakefile.h"
@@ -29,27 +29,27 @@ cmDepends::~cmDepends()
 
 bool cmDepends::Write(std::ostream& makeDepends, std::ostream& internalDepends)
 {
-  // Lookup the set of sources to scan.
-  std::string srcLang = "CMAKE_DEPENDS_CHECK_";
-  srcLang += this->Language;
-  cmMakefile* mf = this->LocalGenerator->GetMakefile();
-  std::string const& srcStr = mf->GetSafeDefinition(srcLang);
-  std::vector<std::string> pairs;
-  cmSystemTools::ExpandListArgument(srcStr, pairs);
-
   std::map<std::string, std::set<std::string>> dependencies;
-  for (std::vector<std::string>::iterator si = pairs.begin();
-       si != pairs.end();) {
-    // Get the source and object file.
-    std::string const& src = *si++;
-    if (si == pairs.end()) {
-      break;
+  {
+    // Lookup the set of sources to scan.
+    std::vector<std::string> pairs;
+    {
+      std::string const srcLang = "CMAKE_DEPENDS_CHECK_" + this->Language;
+      cmMakefile* mf = this->LocalGenerator->GetMakefile();
+      cmSystemTools::ExpandListArgument(mf->GetSafeDefinition(srcLang), pairs);
     }
-    std::string const& obj = *si++;
-    dependencies[obj].insert(src);
+    for (std::vector<std::string>::iterator si = pairs.begin();
+         si != pairs.end();) {
+      // Get the source and object file.
+      std::string const& src = *si++;
+      if (si == pairs.end()) {
+        break;
+      }
+      std::string const& obj = *si++;
+      dependencies[obj].insert(src);
+    }
   }
   for (auto const& d : dependencies) {
-
     // Write the dependencies for this pair.
     if (!this->WriteDependencies(d.second, d.first, makeDepends,
                                  internalDepends)) {
@@ -177,8 +177,7 @@ bool cmDepends::CheckDependencies(
       if (dependerExists) {
         // The dependee and depender both exist.  Compare file times.
         int result = 0;
-        if ((!this->FileComparison->FileTimeCompare(depender, dependee,
-                                                    &result) ||
+        if ((!this->FileTimeCache->Compare(depender, dependee, &result) ||
              result < 0)) {
           // The depender is older than the dependee.
           regenerate = true;
@@ -195,8 +194,8 @@ bool cmDepends::CheckDependencies(
         // The dependee exists, but the depender doesn't. Regenerate if the
         // internalDepends file is older than the dependee.
         int result = 0;
-        if ((!this->FileComparison->FileTimeCompare(internalDependsFileName,
-                                                    dependee, &result) ||
+        if ((!this->FileTimeCache->Compare(internalDependsFileName, dependee,
+                                           &result) ||
              result < 0)) {
           // The depends-file is older than the dependee.
           regenerate = true;
