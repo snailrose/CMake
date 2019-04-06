@@ -389,7 +389,7 @@ cmGlobalXCodeGenerator::GenerateBuildCommand(
   return { std::move(makeCommand) };
 }
 
-///! Create a local generator appropriate to this Global Generator
+//! Create a local generator appropriate to this Global Generator
 cmLocalGenerator* cmGlobalXCodeGenerator::CreateLocalGenerator(cmMakefile* mf)
 {
   return new cmLocalXCodeGenerator(this, mf);
@@ -1799,6 +1799,10 @@ void cmGlobalXCodeGenerator::CreateBuildSettings(cmGeneratorTarget* gtgt,
     // Add language-specific flags.
     this->CurrentLocalGenerator->AddLanguageFlags(flags, gtgt, lang,
                                                   configName);
+
+    if (gtgt->IsIPOEnabled(lang, configName)) {
+      this->CurrentLocalGenerator->AppendFeatureOptions(flags, lang, "IPO");
+    }
 
     // Add shared-library flags if needed.
     this->CurrentLocalGenerator->AddCMP0018Flags(flags, gtgt, lang,

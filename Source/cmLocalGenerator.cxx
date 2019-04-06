@@ -457,7 +457,7 @@ void cmLocalGenerator::GenerateInstallRules()
        << "if(NOT DEFINED CMAKE_INSTALL_PREFIX)" << std::endl
        << "  set(CMAKE_INSTALL_PREFIX \"" << prefix << "\")" << std::endl
        << "endif()" << std::endl
-       << "string(REGEX REPLACE \"/$\" \"\" CMAKE_INSTALL_PREFIX "
+       << R"(string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX )"
        << "\"${CMAKE_INSTALL_PREFIX}\")" << std::endl
        << std::endl;
 
@@ -1258,6 +1258,10 @@ void cmLocalGenerator::GetTargetCompileFlags(cmGeneratorTarget* target,
   // Add language-specific flags.
   this->AddLanguageFlags(flags, target, lang, config);
 
+  if (target->IsIPOEnabled(lang, config)) {
+    this->AppendFeatureOptions(flags, lang, "IPO");
+  }
+
   this->AddArchitectureFlags(flags, target, lang, config);
 
   if (lang == "Fortran") {
@@ -1515,9 +1519,8 @@ void cmLocalGenerator::AddLanguageFlags(std::string& flags,
   flagsVar += "_FLAGS";
   this->AddConfigVariableFlags(flags, flagsVar, config);
 
-  if (target->IsIPOEnabled(lang, config)) {
-    this->AppendFeatureOptions(flags, lang, "IPO");
-  }
+  // Placeholder for possible future per-target flags.
+  static_cast<void>(target);
 }
 
 void cmLocalGenerator::AddLanguageFlagsForLinking(
@@ -1534,6 +1537,10 @@ void cmLocalGenerator::AddLanguageFlagsForLinking(
   }
 
   this->AddLanguageFlags(flags, target, lang, config);
+
+  if (target->IsIPOEnabled(lang, config)) {
+    this->AppendFeatureOptions(flags, lang, "IPO");
+  }
 }
 
 cmGeneratorTarget* cmLocalGenerator::FindGeneratorTargetToUse(
@@ -2266,7 +2273,7 @@ void cmLocalGenerator::JoinDefines(const std::set<std::string>& defines,
       def += define.substr(0, eq);
       if (eq != std::string::npos) {
         def += "=";
-        def += this->EscapeForShell(define.c_str() + eq + 1, true);
+        def += this->EscapeForShell(define.substr(eq + 1), true);
       }
     }
     definesString += itemSeparator;
