@@ -38,7 +38,8 @@ public:
   /** Return true if building for Windows CE */
   bool TargetsWindowsCE() const override
   {
-    return !this->WindowsCEVersion.empty();
+    return true;
+    //!this->WindowsCEVersion.empty();
   }
 
 protected:

@@ -309,7 +309,8 @@ bool cmGlobalVisualStudio8Generator::DeployInhibited(
 
 bool cmGlobalVisualStudio8Generator::TargetSystemSupportsDeployment() const
 {
-  return this->TargetsWindowsCE();
+  return true;
+  //return this->TargetsWindowsCE();
 }
 
 bool cmGlobalVisualStudio8Generator::ComputeTargetDepends()

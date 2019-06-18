@@ -1946,15 +1946,8 @@ void cmVisualStudio10TargetGenerator::ComputeCustomCommands()
     this->GeneratorTarget->GetCustomCommands(customCommands, "");
     for (cmSourceFile const* si : customCommands) {
       std::string sourcePath = si->GetFullPath();
-
-      if (this->ProjectType != csstandard) {
-        for (std::string& c : this->Configurations) {
-          std::string name = "CustomCommand_" + c + "_" +
-            cmSystemTools::ComputeStringMD5(sourcePath);
-          this->CSharpCustomCommandNames.insert(name);
-        }
-      } else {
-        std::string name = "CustomCommand_" +
+      for (std::string& c : this->Configurations) {
+        std::string name = "CustomCommand_" + c + "_" +
           cmSystemTools::ComputeStringMD5(sourcePath);
         this->CSharpCustomCommandNames.insert(name);
       }
@@ -2004,7 +1997,7 @@ void cmVisualStudio10TargetGenerator::ComputeCustomCommands()
     }
   }
 
-  void cmVisualStudio10TargetGenerator::WriteCustomRule(
+void cmVisualStudio10TargetGenerator::WriteCustomRule(
     Elem & e0, cmSourceFile const* source, cmCustomCommand const& command)
   {
     std::string sourcePath = source->GetFullPath();
@@ -2078,22 +2071,11 @@ void cmVisualStudio10TargetGenerator::ComputeCustomCommands()
         sep = ";";
       }
       if (this->ProjectType == csproj || this->ProjectType == csstandard) {
+        std::string name = "CustomCommand_" + c + "_" +
+          cmSystemTools::ComputeStringMD5(sourcePath);
+        this->WriteCustomRuleCSharp(e0, c, name, script, inputs.str(),
+                                    outputs.str(), comment);
 
-          if (this->ProjectType != csstandard)
-          {
-              std::string name = "CustomCommand_" + c + "_" +
-                cmSystemTools::ComputeStringMD5(sourcePath);
-              this->WriteCustomRuleCSharp(e0, c, name, script, inputs.str(),
-                                          outputs.str(), comment);
-          }
-          else
-          {
-            std::string name = "CustomCommand_" +
-              cmSystemTools::ComputeStringMD5(sourcePath);
-            this->WriteCustomRuleCSharp(e0, c, name, script, inputs.str(),
-                                        outputs.str(), comment);
-
-          }
       } else {
         this->WriteCustomRuleCpp(*spe2, c, script, inputs.str(), outputs.str(),
                                  comment);
@@ -2126,10 +2108,7 @@ void cmVisualStudio10TargetGenerator::ComputeCustomCommands()
   {
     this->CSharpCustomCommandNames.insert(name);
     Elem e1(e0, "Target");
-
-    if (this->ProjectType != csstandard)
-        e1.Attribute("Condition", this->CalcCondition(config));
-
+    e1.Attribute("Condition", this->CalcCondition(config));
     e1.S << "\n    Name=\"" << name << "\"";
     e1.S << "\n    Inputs=\"" << cmVS10EscapeAttr(inputs) << "\"";
     e1.S << "\n    Outputs=\"" << cmVS10EscapeAttr(outputs) << "\"";
