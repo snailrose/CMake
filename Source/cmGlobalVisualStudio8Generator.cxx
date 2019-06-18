@@ -287,11 +287,18 @@ bool cmGlobalVisualStudio8Generator::NeedsDeploy(
   cmGeneratorTarget const& target, const char* config) const
 {
   cmStateEnums::TargetType type = target.GetType();
-  bool noDeploy = DeployInhibited(target, config);
-  return !noDeploy &&
-    (type == cmStateEnums::EXECUTABLE ||
-     type == cmStateEnums::SHARED_LIBRARY) &&
-    this->TargetSystemSupportsDeployment();
+  bool forceDeploy = DeployForced(target, config);
+
+  if (forceDeploy) {
+    return (type == cmStateEnums::EXECUTABLE ||
+            type == cmStateEnums::SHARED_LIBRARY);
+  } else {
+    bool noDeploy = DeployInhibited(target, config);
+    return !noDeploy &&
+      (type == cmStateEnums::EXECUTABLE ||
+       type == cmStateEnums::SHARED_LIBRARY) &&
+      this->TargetSystemSupportsDeployment();
+  }
 }
 
 bool cmGlobalVisualStudio8Generator::DeployInhibited(
@@ -307,10 +314,22 @@ bool cmGlobalVisualStudio8Generator::DeployInhibited(
   return rVal;
 }
 
+bool cmGlobalVisualStudio8Generator::DeployForced(
+  cmGeneratorTarget const& target, const char* config) const
+{
+  bool rVal = false;
+  if (const char* propStr = target.GetProperty("VS_FORCE_SOLUTION_DEPLOY")) {
+    cmGeneratorExpression ge;
+    std::unique_ptr<cmCompiledGeneratorExpression> cge = ge.Parse(propStr);
+    std::string prop = cge->Evaluate(target.LocalGenerator, config);
+    rVal = cmSystemTools::IsOn(prop);
+  }
+  return rVal;
+}
+
 bool cmGlobalVisualStudio8Generator::TargetSystemSupportsDeployment() const
 {
-  return true;
-  //return this->TargetsWindowsCE();
+  return this->TargetsWindowsCE();
 }
 
 bool cmGlobalVisualStudio8Generator::ComputeTargetDepends()

@@ -38,8 +38,7 @@ public:
   /** Return true if building for Windows CE */
   bool TargetsWindowsCE() const override
   {
-    return true;
-    //!this->WindowsCEVersion.empty();
+    return !this->WindowsCEVersion.empty();
   }
 
 protected:
@@ -60,6 +59,10 @@ protected:
 
   /** Returns true if deployment has been disabled in cmake file. */
   bool DeployInhibited(cmGeneratorTarget const& target,
+                       const char* config) const;
+
+  /** Returns true if deployment has been forced in cmake file. */
+  bool DeployForced(cmGeneratorTarget const& target,
                        const char* config) const;
 
   /** Returns true if the target system support debugging deployment. */
